@@ -107,22 +107,26 @@ export async function exportAssignmentList(
     const row = worksheet.getRow(rowNum);
     const transfer = assignedTransfers[i];
 
+    // 15행마다 굵은 하단선 (3, 18, 33, 48...)
+    const isThickBottomRow = (rowNum - 3) % 15 === 0;
+    const bottomStyle = isThickBottomRow ? 'medium' : 'thin';
+
     // B열 (왼쪽 외곽선 medium)
-    row.getCell(2).border = { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'medium' }, right: { style: 'thin' } };
+    row.getCell(2).border = { top: { style: 'thin' }, bottom: { style: bottomStyle }, left: { style: 'medium' }, right: { style: 'thin' } };
 
     // C열 (왼쪽 테두리 없음)
-    row.getCell(3).border = { top: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+    row.getCell(3).border = { top: { style: 'thin' }, bottom: { style: bottomStyle }, right: { style: 'thin' } };
     row.getCell(3).alignment = { horizontal: 'center', vertical: 'middle' };
 
     // D~K열 (내부 thin)
     for (let col = 4; col <= 11; col++) {
       const cell = row.getCell(col);
-      cell.border = { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } };
+      cell.border = { top: { style: 'thin' }, bottom: { style: bottomStyle }, left: { style: 'thin' }, right: { style: 'thin' } };
       cell.alignment = { horizontal: 'center', vertical: 'middle' };
     }
 
     // L열 (오른쪽 외곽선 medium)
-    row.getCell(12).border = { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'medium' } };
+    row.getCell(12).border = { top: { style: 'thin' }, bottom: { style: bottomStyle }, left: { style: 'thin' }, right: { style: 'medium' } };
     row.getCell(12).alignment = { horizontal: 'center', vertical: 'middle' };
 
     if (transfer) {
