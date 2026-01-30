@@ -55,20 +55,6 @@ export async function exportAssignmentList(
     { key: 'L', width: 7 },   // 비고
   ];
 
-  // 테두리 스타일 정의
-  const thinBorder: Partial<ExcelJS.Borders> = {
-    top: { style: 'thin' },
-    left: { style: 'thin' },
-    bottom: { style: 'thin' },
-    right: { style: 'thin' },
-  };
-  const headerBorder: Partial<ExcelJS.Borders> = {
-    top: { style: 'medium' },
-    left: { style: 'thin' },
-    bottom: { style: 'medium' },
-    right: { style: 'thin' },
-  };
-
   // 2행: 제목 (B2:L2 병합)
   worksheet.mergeCells('B2:L2');
   const titleCell = worksheet.getCell('B2');
@@ -77,18 +63,39 @@ export async function exportAssignmentList(
   titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
   worksheet.getRow(2).height = 30;
 
-  // 3행: 헤더
+  // 3행: 헤더 (B~L열, 원본과 동일한 테두리)
   const headers = ['', '', '발령일자', '소속', '직급', '성  명', '발령 사항', '발령권자', '발령근거', '기재자\n날  인', '확인자\n날  인', '비고'];
   const headerRow = worksheet.getRow(3);
-  headers.forEach((h, i) => {
-    const cell = headerRow.getCell(i + 1);
-    cell.value = h;
-    if (i >= 2) { // C열부터
-      cell.border = headerBorder;
-      cell.font = { bold: true };
-      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-    }
-  });
+
+  // B열 헤더 (왼쪽 외곽선 medium)
+  const cellB3 = headerRow.getCell(2);
+  cellB3.border = { top: { style: 'medium' }, bottom: { style: 'medium' }, left: { style: 'medium' }, right: { style: 'thin' } };
+  cellB3.font = { bold: true };
+  cellB3.alignment = { horizontal: 'center', vertical: 'middle' };
+
+  // C열 헤더 (왼쪽 테두리 없음)
+  const cellC3 = headerRow.getCell(3);
+  cellC3.value = headers[2];
+  cellC3.border = { top: { style: 'medium' }, bottom: { style: 'medium' }, right: { style: 'thin' } };
+  cellC3.font = { bold: true };
+  cellC3.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+
+  // D~K열 헤더 (내부 thin)
+  for (let col = 4; col <= 11; col++) {
+    const cell = headerRow.getCell(col);
+    cell.value = headers[col - 1];
+    cell.border = { top: { style: 'medium' }, bottom: { style: 'medium' }, left: { style: 'thin' }, right: { style: 'thin' } };
+    cell.font = { bold: true };
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+  }
+
+  // L열 헤더 (오른쪽 외곽선 medium)
+  const cellL3 = headerRow.getCell(12);
+  cellL3.value = headers[11];
+  cellL3.border = { top: { style: 'medium' }, bottom: { style: 'medium' }, left: { style: 'thin' }, right: { style: 'medium' } };
+  cellL3.font = { bold: true };
+  cellL3.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+
   headerRow.height = 30;
 
   // 4행부터 데이터 또는 빈 행
@@ -100,12 +107,23 @@ export async function exportAssignmentList(
     const row = worksheet.getRow(rowNum);
     const transfer = assignedTransfers[i];
 
-    // C~L열에 테두리와 데이터 적용
-    for (let col = 3; col <= 12; col++) { // C=3, L=12
+    // B열 (왼쪽 외곽선 medium)
+    row.getCell(2).border = { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'medium' }, right: { style: 'thin' } };
+
+    // C열 (왼쪽 테두리 없음)
+    row.getCell(3).border = { top: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+    row.getCell(3).alignment = { horizontal: 'center', vertical: 'middle' };
+
+    // D~K열 (내부 thin)
+    for (let col = 4; col <= 11; col++) {
       const cell = row.getCell(col);
-      cell.border = thinBorder;
+      cell.border = { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } };
       cell.alignment = { horizontal: 'center', vertical: 'middle' };
     }
+
+    // L열 (오른쪽 외곽선 medium)
+    row.getCell(12).border = { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'medium' } };
+    row.getCell(12).alignment = { horizontal: 'center', vertical: 'middle' };
 
     if (transfer) {
       row.getCell(3).value = appointmentDate;       // C: 발령일자
