@@ -3,6 +3,17 @@ import 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
 import type { InternalTransfer, SchoolShortage, ExternalOut, ExternalIn } from '../types';
+import { ASSIGNMENT_TEMPLATE_BASE64 } from './templates';
+
+// base64를 ArrayBuffer로 변환
+function base64ToArrayBuffer(base64: string): ArrayBuffer {
+  const binaryString = atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
 
 // jsPDF 타입 확장
 declare module 'jspdf' {
@@ -37,9 +48,8 @@ export async function exportAssignmentList(
   const officeName = settings.office_name || '양산교육지원청';
 
   try {
-    // 템플릿 파일 불러오기
-    const response = await fetch('/templates/발령대장_템플릿.xlsx');
-    const arrayBuffer = await response.arrayBuffer();
+    // base64로 내장된 템플릿 사용
+    const arrayBuffer = base64ToArrayBuffer(ASSIGNMENT_TEMPLATE_BASE64);
 
     // ExcelJS로 읽기 (스타일 보존)
     const workbook = new ExcelJS.Workbook();
