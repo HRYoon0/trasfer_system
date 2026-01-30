@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import type { InternalTransfer, SchoolShortage, ExternalOut, ExternalIn } from '../types';
 
 // jsPDF 타입 확장
@@ -26,7 +27,7 @@ function createSheetWithHeaders(headers: string[], data: any[][], colWidths?: nu
   return ws;
 }
 
-// 발령대장 (Excel) - 원본 템플릿 사용
+// 발령대장 (Excel) - exceljs로 템플릿 스타일 유지
 export async function exportAssignmentList(
   transfers: InternalTransfer[],
   settings: Record<string, string>
@@ -39,26 +40,46 @@ export async function exportAssignmentList(
     // 템플릿 파일 불러오기
     const response = await fetch('/templates/발령대장_템플릿.xlsx');
     const arrayBuffer = await response.arrayBuffer();
-    const wb = XLSX.read(arrayBuffer, { type: 'array' });
-    const ws = wb.Sheets['발령대장'];
+
+    // ExcelJS로 읽기 (스타일 보존)
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(arrayBuffer);
+    const worksheet = workbook.getWorksheet('발령대장');
+
+    if (!worksheet) {
+      alert('발령대장 시트를 찾을 수 없습니다.');
+      return;
+    }
 
     // 4행부터 데이터 입력 (C4부터 시작)
     assignedTransfers.forEach((t, index) => {
       const row = 4 + index;
-      ws[`C${row}`] = { v: appointmentDate, t: 's' };
-      ws[`D${row}`] = { v: t.current_school_name || '', t: 's' };
-      ws[`E${row}`] = { v: '교사', t: 's' };
-      ws[`F${row}`] = { v: t.teacher_name, t: 's' };
-      ws[`G${row}`] = { v: `${t.assigned_school_name || ''} 발령`, t: 's' };
-      ws[`H${row}`] = { v: `${officeName} 교육장`, t: 's' };
-      ws[`I${row}`] = { v: '', t: 's' };
-      ws[`J${row}`] = { v: '', t: 's' };
-      ws[`K${row}`] = { v: '', t: 's' };
-      ws[`L${row}`] = { v: t.note || '', t: 's' };
+      const excelRow = worksheet.getRow(row);
+
+      // 값 입력 (기존 스타일 유지)
+      excelRow.getCell('C').value = appointmentDate;
+      excelRow.getCell('D').value = t.current_school_name || '';
+      excelRow.getCell('E').value = '교사';
+      excelRow.getCell('F').value = t.teacher_name;
+      excelRow.getCell('G').value = `${t.assigned_school_name || ''} 발령`;
+      excelRow.getCell('H').value = `${officeName} 교육장`;
+      excelRow.getCell('I').value = '';
+      excelRow.getCell('J').value = '';
+      excelRow.getCell('K').value = '';
+      excelRow.getCell('L').value = t.note || '';
+
+      excelRow.commit();
     });
 
-    const fileName = `발령대장_${settings.transfer_year || '2025'}.xlsx`;
-    XLSX.writeFile(wb, fileName);
+    // 파일 다운로드
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `발령대장_${settings.transfer_year || '2025'}.xlsx`;
+    link.click();
+    URL.revokeObjectURL(url);
   } catch (error) {
     console.error('템플릿 로드 실패:', error);
     alert('발령대장 템플릿을 불러올 수 없습니다.');
