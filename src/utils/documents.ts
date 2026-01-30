@@ -17,6 +17,15 @@ const PDF_OPTIONS = {
   format: 'a4' as const,
 };
 
+// 헤더와 데이터로 시트 생성 (데이터가 없어도 헤더 표시)
+function createSheetWithHeaders(headers: string[], data: any[][], colWidths?: number[]) {
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
+  if (colWidths) {
+    ws['!cols'] = colWidths.map(wch => ({ wch }));
+  }
+  return ws;
+}
+
 // 발령대장 (Excel)
 export function exportAssignmentList(
   transfers: InternalTransfer[],
@@ -24,32 +33,21 @@ export function exportAssignmentList(
 ) {
   const assignedTransfers = transfers.filter(t => t.assigned_school_id);
 
-  const data = assignedTransfers.map((t, index) => ({
-    '순번': index + 1,
-    '성명': t.teacher_name,
-    '성별': t.gender || '',
-    '현소속': t.current_school_name || '',
-    '발령학교': t.assigned_school_name || '',
-    '희망순위': t.preference_round,
-    '총점': t.total_score,
-    '비고': t.note || '',
-  }));
+  const headers = ['순번', '성명', '성별', '현소속', '발령학교', '희망순위', '총점', '비고'];
+  const data = assignedTransfers.map((t, index) => [
+    index + 1,
+    t.teacher_name,
+    t.gender || '',
+    t.current_school_name || '',
+    t.assigned_school_name || '',
+    t.preference_round,
+    t.total_score,
+    t.note || '',
+  ]);
 
-  const ws = XLSX.utils.json_to_sheet(data);
+  const ws = createSheetWithHeaders(headers, data, [5, 10, 5, 15, 15, 10, 8, 20]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '발령대장');
-
-  // 열 너비 설정
-  ws['!cols'] = [
-    { wch: 5 },  // 순번
-    { wch: 10 }, // 성명
-    { wch: 5 },  // 성별
-    { wch: 15 }, // 현소속
-    { wch: 15 }, // 발령학교
-    { wch: 10 }, // 희망순위
-    { wch: 8 },  // 총점
-    { wch: 20 }, // 비고
-  ];
 
   const fileName = `발령대장_${settings.transfer_year || '2025'}.xlsx`;
   XLSX.writeFile(wb, fileName);
@@ -60,27 +58,19 @@ export function exportSchoolShortage(
   shortages: SchoolShortage[],
   settings: Record<string, string>
 ) {
-  const data = shortages.map((s, index) => ({
-    '순번': index + 1,
-    '학교명': s.name,
-    '정원': s.quota,
-    '현원': s.current_count,
-    '과부족': s.shortage,
-    '상태': s.shortage < 0 ? '결원' : s.shortage > 0 ? '과원' : '정원',
-  }));
+  const headers = ['순번', '학교명', '정원', '현원', '과부족', '상태'];
+  const data = shortages.map((s, index) => [
+    index + 1,
+    s.name,
+    s.quota,
+    s.current_count,
+    s.shortage,
+    s.shortage < 0 ? '결원' : s.shortage > 0 ? '과원' : '정원',
+  ]);
 
-  const ws = XLSX.utils.json_to_sheet(data);
+  const ws = createSheetWithHeaders(headers, data, [5, 15, 8, 8, 8, 8]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '과부족현황');
-
-  ws['!cols'] = [
-    { wch: 5 },  // 순번
-    { wch: 15 }, // 학교명
-    { wch: 8 },  // 정원
-    { wch: 8 },  // 현원
-    { wch: 8 },  // 과부족
-    { wch: 8 },  // 상태
-  ];
 
   const fileName = `학교별_과부족현황_${settings.transfer_year || '2025'}.xlsx`;
   XLSX.writeFile(wb, fileName);
@@ -91,28 +81,30 @@ export function exportInternalTransferList(
   transfers: InternalTransfer[],
   settings: Record<string, string>
 ) {
-  const data = transfers.map((t, index) => ({
-    '순번': index + 1,
-    '성명': t.teacher_name,
-    '성별': t.gender || '',
-    '생년월일': t.birth_date || '',
-    '현소속': t.current_school_name || '',
-    '1지망': t.wish_school_1_name || '',
-    '2지망': t.wish_school_2_name || '',
-    '3지망': t.wish_school_3_name || '',
-    '총점': t.total_score,
-    '동점1': t.tiebreaker_1,
-    '동점2': t.tiebreaker_2,
-    '동점3': t.tiebreaker_3,
-    '희망순위': t.preference_round,
-    '배치학교': t.assigned_school_name || '',
-    '제외사유': t.exclusion_reason || '',
-    '만기자': t.is_expired ? 'O' : '',
-    '우선배치': t.is_priority ? 'O' : '',
-    '비고': t.note || '',
-  }));
+  const headers = ['순번', '성명', '성별', '생년월일', '현소속', '1지망', '2지망', '3지망',
+                   '총점', '동점1', '동점2', '동점3', '희망순위', '배치학교', '제외사유', '만기자', '우선배치', '비고'];
+  const data = transfers.map((t, index) => [
+    index + 1,
+    t.teacher_name,
+    t.gender || '',
+    t.birth_date || '',
+    t.current_school_name || '',
+    t.wish_school_1_name || '',
+    t.wish_school_2_name || '',
+    t.wish_school_3_name || '',
+    t.total_score,
+    t.tiebreaker_1,
+    t.tiebreaker_2,
+    t.tiebreaker_3,
+    t.preference_round,
+    t.assigned_school_name || '',
+    t.exclusion_reason || '',
+    t.is_expired ? 'O' : '',
+    t.is_priority ? 'O' : '',
+    t.note || '',
+  ]);
 
-  const ws = XLSX.utils.json_to_sheet(data);
+  const ws = createSheetWithHeaders(headers, data);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '관내전출입명부');
 
@@ -125,18 +117,19 @@ export function exportExternalOutList(
   transfers: ExternalOut[],
   settings: Record<string, string>
 ) {
-  const data = transfers.map((t, index) => ({
-    '순번': index + 1,
-    '유형': t.transfer_type,
-    '성명': t.teacher_name,
-    '성별': t.gender || '',
-    '현소속': t.school_name || '',
-    '전출지': t.destination || '',
-    '별도정원': t.separate_quota || '',
-    '비고': t.note || '',
-  }));
+  const headers = ['순번', '유형', '성명', '성별', '현소속', '전출지', '별도정원', '비고'];
+  const data = transfers.map((t, index) => [
+    index + 1,
+    t.transfer_type,
+    t.teacher_name,
+    t.gender || '',
+    t.school_name || '',
+    t.destination || '',
+    t.separate_quota || '',
+    t.note || '',
+  ]);
 
-  const ws = XLSX.utils.json_to_sheet(data);
+  const ws = createSheetWithHeaders(headers, data, [5, 8, 10, 5, 15, 15, 10, 20]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '관외전출명부');
 
@@ -149,18 +142,19 @@ export function exportExternalInList(
   transfers: ExternalIn[],
   settings: Record<string, string>
 ) {
-  const data = transfers.map((t, index) => ({
-    '순번': index + 1,
-    '유형': t.transfer_type,
-    '성명': t.teacher_name,
-    '성별': t.gender || '',
-    '원소속': t.origin_school || '',
-    '배치학교': t.assigned_school_name || '',
-    '별도정원': t.separate_quota || '',
-    '비고': t.note || '',
-  }));
+  const headers = ['순번', '유형', '성명', '성별', '원소속', '배치학교', '별도정원', '비고'];
+  const data = transfers.map((t, index) => [
+    index + 1,
+    t.transfer_type,
+    t.teacher_name,
+    t.gender || '',
+    t.origin_school || '',
+    t.assigned_school_name || '',
+    t.separate_quota || '',
+    t.note || '',
+  ]);
 
-  const ws = XLSX.utils.json_to_sheet(data);
+  const ws = createSheetWithHeaders(headers, data, [5, 8, 10, 5, 15, 15, 10, 20]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '관외전입명부');
 
@@ -309,7 +303,7 @@ export function exportAssignmentListPDF(
   doc.autoTable({
     startY: 30,
     head: [['순번', '성명', '성별', '현소속', '발령학교', '희망순위', '총점', '비고']],
-    body: tableData,
+    body: tableData.length > 0 ? tableData : [['', '', '', '', '', '', '', '']],
     styles: { fontSize: 9, cellPadding: 2 },
     headStyles: { fillColor: [66, 139, 202] },
   });
@@ -331,47 +325,51 @@ export function exportComprehensiveReport(
   const wb = XLSX.utils.book_new();
 
   // 학교별 현황
-  const schoolData = data.schools.map((s, i) => ({
-    '순번': i + 1,
-    '학교명': s.name,
-    '정원': s.quota,
-    '현원': s.current_count,
-    '과부족': s.shortage,
-  }));
-  const ws1 = XLSX.utils.json_to_sheet(schoolData);
+  const schoolHeaders = ['순번', '학교명', '정원', '현원', '과부족'];
+  const schoolData = data.schools.map((s, i) => [
+    i + 1,
+    s.name,
+    s.quota,
+    s.current_count,
+    s.shortage,
+  ]);
+  const ws1 = createSheetWithHeaders(schoolHeaders, schoolData, [5, 15, 8, 8, 8]);
   XLSX.utils.book_append_sheet(wb, ws1, '학교별현황');
 
   // 관내전출입
-  const internalData = data.internalTransfers.map((t, i) => ({
-    '순번': i + 1,
-    '성명': t.teacher_name,
-    '현소속': t.current_school_name || '',
-    '배치학교': t.assigned_school_name || '',
-    '희망순위': t.preference_round,
-    '총점': t.total_score,
-    '상태': t.assigned_school_id ? '배치완료' : t.exclusion_reason ? '제외' : '미배치',
-  }));
-  const ws2 = XLSX.utils.json_to_sheet(internalData);
+  const internalHeaders = ['순번', '성명', '현소속', '배치학교', '희망순위', '총점', '상태'];
+  const internalData = data.internalTransfers.map((t, i) => [
+    i + 1,
+    t.teacher_name,
+    t.current_school_name || '',
+    t.assigned_school_name || '',
+    t.preference_round,
+    t.total_score,
+    t.assigned_school_id ? '배치완료' : t.exclusion_reason ? '제외' : '미배치',
+  ]);
+  const ws2 = createSheetWithHeaders(internalHeaders, internalData);
   XLSX.utils.book_append_sheet(wb, ws2, '관내전출입');
 
   // 관외전출
-  const extOutData = data.externalOut.map((t, i) => ({
-    '순번': i + 1,
-    '성명': t.teacher_name,
-    '현소속': t.school_name || '',
-    '전출지': t.destination || '',
-  }));
-  const ws3 = XLSX.utils.json_to_sheet(extOutData);
+  const extOutHeaders = ['순번', '성명', '현소속', '전출지'];
+  const extOutData = data.externalOut.map((t, i) => [
+    i + 1,
+    t.teacher_name,
+    t.school_name || '',
+    t.destination || '',
+  ]);
+  const ws3 = createSheetWithHeaders(extOutHeaders, extOutData, [5, 10, 15, 15]);
   XLSX.utils.book_append_sheet(wb, ws3, '관외전출');
 
   // 관외전입
-  const extInData = data.externalIn.map((t, i) => ({
-    '순번': i + 1,
-    '성명': t.teacher_name,
-    '원소속': t.origin_school || '',
-    '배치학교': t.assigned_school_name || '',
-  }));
-  const ws4 = XLSX.utils.json_to_sheet(extInData);
+  const extInHeaders = ['순번', '성명', '원소속', '배치학교'];
+  const extInData = data.externalIn.map((t, i) => [
+    i + 1,
+    t.teacher_name,
+    t.origin_school || '',
+    t.assigned_school_name || '',
+  ]);
+  const ws4 = createSheetWithHeaders(extInHeaders, extInData, [5, 10, 15, 15]);
   XLSX.utils.book_append_sheet(wb, ws4, '관외전입');
 
   const fileName = `전보종합현황_${settings.transfer_year || '2025'}.xlsx`;
