@@ -93,7 +93,7 @@ export async function exportAssignmentList(
 
   // 4행부터 데이터 또는 빈 행
   const dataStartRow = 4;
-  const totalRows = Math.max(assignedTransfers.length, 20); // 최소 20행
+  const totalRows = Math.max(assignedTransfers.length, 100); // 최소 100행 (원본과 동일)
 
   for (let i = 0; i < totalRows; i++) {
     const rowNum = dataStartRow + i;
