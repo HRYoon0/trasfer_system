@@ -7,6 +7,7 @@ const menuItems = [
   { path: '/external', label: '관외전출입', icon: '🔄' },
   { path: '/internal', label: '관내전출입', icon: '⭐' },
   { path: '/assignment', label: '배치관리', icon: '🎯' },
+  { path: '/documents', label: '문서출력', icon: '🖨️' },
   { path: '/settings', label: '설정', icon: '⚙️' },
 ];
 

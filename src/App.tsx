@@ -7,6 +7,7 @@ import External from './pages/External';
 import Internal from './pages/Internal';
 import Assignment from './pages/Assignment';
 import Settings from './pages/Settings';
+import Documents from './pages/Documents';
 
 function App() {
   return (
@@ -19,6 +20,7 @@ function App() {
           <Route path="external" element={<External />} />
           <Route path="internal" element={<Internal />} />
           <Route path="assignment" element={<Assignment />} />
+          <Route path="documents" element={<Documents />} />
           <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>
