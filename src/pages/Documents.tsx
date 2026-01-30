@@ -56,8 +56,8 @@ export default function Documents() {
     }
   };
 
-  const handleExportAssignmentExcel = () => {
-    exportAssignmentList(internalTransfers, settings);
+  const handleExportAssignmentExcel = async () => {
+    await exportAssignmentList(internalTransfers, settings);
   };
 
   const handleExportAssignmentPDF = () => {
