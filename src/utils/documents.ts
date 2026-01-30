@@ -26,7 +26,7 @@ function createSheetWithHeaders(headers: string[], data: any[][], colWidths?: nu
   return ws;
 }
 
-// 발령대장 (Excel) - 원본 양식에 맞춤
+// 발령대장 (Excel) - 원본 양식 그대로 재현
 export function exportAssignmentList(
   transfers: InternalTransfer[],
   settings: Record<string, string>
@@ -35,22 +35,62 @@ export function exportAssignmentList(
   const appointmentDate = settings.appointment_date || '2025-03-01';
   const officeName = settings.office_name || '양산교육지원청';
 
-  // 원본 양식: 발령일자, 소속, 직급, 성명, 발령사항, 발령권자, 발령근거, 기재자, 확인자, 비고
-  const headers = ['발령일자', '소속', '직급', '성  명', '발령 사항', '발령권자', '발령근거', '기재자\n날   인', '확인자\n날   인', '비고'];
-  const data = assignedTransfers.map((t) => [
-    appointmentDate,
-    t.current_school_name || '',
-    '교사',
-    t.teacher_name,
-    `${t.assigned_school_name || ''} 발령`,
-    `${officeName} 교육장`,
-    '',
-    '',
-    '',
-    t.note || '',
-  ]);
+  // 원본 구조: B열부터 시작, 2행에 제목, 3행에 헤더, 4행부터 데이터
+  const aoa: any[][] = [
+    // 1행: 빈 행
+    ['', '', '', '', '', '', '', '', '', '', '', ''],
+    // 2행: 제목 (B2에 "발  령  대  장")
+    ['', '발  령  대  장', '', '', '', '', '', '', '', '', '', ''],
+    // 3행: 헤더 (B3부터)
+    ['', '', '발령일자', '소속', '직급', '성  명', '발령 사항', '발령권자', '발령근거', '기재자\n날   인', '확인자\n날   인', '비고'],
+  ];
 
-  const ws = createSheetWithHeaders(headers, data, [12, 15, 8, 10, 20, 18, 12, 10, 10, 15]);
+  // 4행부터 데이터 추가
+  assignedTransfers.forEach((t) => {
+    aoa.push([
+      '', // A열 빈칸
+      '', // B열 빈칸
+      appointmentDate,
+      t.current_school_name || '',
+      '교사',
+      t.teacher_name,
+      `${t.assigned_school_name || ''} 발령`,
+      `${officeName} 교육장`,
+      '',
+      '',
+      '',
+      t.note || '',
+    ]);
+  });
+
+  // 데이터가 없어도 빈 행 하나는 추가
+  if (assignedTransfers.length === 0) {
+    aoa.push(['', '', '', '', '', '', '', '', '', '', '', '']);
+  }
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+  // B2:L2 병합 (제목 셀)
+  ws['!merges'] = [
+    { s: { r: 1, c: 1 }, e: { r: 1, c: 11 } } // B2:L2
+  ];
+
+  // 열 너비 설정 (원본과 동일)
+  ws['!cols'] = [
+    { wch: 3 },   // A
+    { wch: 5 },   // B
+    { wch: 10 },  // C (발령일자)
+    { wch: 17 },  // D (소속)
+    { wch: 5 },   // E (직급)
+    { wch: 9 },   // F (성명)
+    { wch: 37 },  // G (발령사항)
+    { wch: 9 },   // H (발령권자)
+    { wch: 12 },  // I (발령근거)
+    { wch: 8 },   // J (기재자)
+    { wch: 8 },   // K (확인자)
+    { wch: 7 },   // L (비고)
+  ];
+
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '발령대장');
 
