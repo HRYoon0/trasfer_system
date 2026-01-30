@@ -26,26 +26,31 @@ function createSheetWithHeaders(headers: string[], data: any[][], colWidths?: nu
   return ws;
 }
 
-// 발령대장 (Excel)
+// 발령대장 (Excel) - 원본 양식에 맞춤
 export function exportAssignmentList(
   transfers: InternalTransfer[],
   settings: Record<string, string>
 ) {
   const assignedTransfers = transfers.filter(t => t.assigned_school_id);
+  const appointmentDate = settings.appointment_date || '2025-03-01';
+  const officeName = settings.office_name || '양산교육지원청';
 
-  const headers = ['순번', '성명', '성별', '현소속', '발령학교', '희망순위', '총점', '비고'];
-  const data = assignedTransfers.map((t, index) => [
-    index + 1,
-    t.teacher_name,
-    t.gender || '',
+  // 원본 양식: 발령일자, 소속, 직급, 성명, 발령사항, 발령권자, 발령근거, 기재자, 확인자, 비고
+  const headers = ['발령일자', '소속', '직급', '성  명', '발령 사항', '발령권자', '발령근거', '기재자\n날   인', '확인자\n날   인', '비고'];
+  const data = assignedTransfers.map((t) => [
+    appointmentDate,
     t.current_school_name || '',
-    t.assigned_school_name || '',
-    t.preference_round,
-    t.total_score,
+    '교사',
+    t.teacher_name,
+    `${t.assigned_school_name || ''} 발령`,
+    `${officeName} 교육장`,
+    '',
+    '',
+    '',
     t.note || '',
   ]);
 
-  const ws = createSheetWithHeaders(headers, data, [5, 10, 5, 15, 15, 10, 8, 20]);
+  const ws = createSheetWithHeaders(headers, data, [12, 15, 8, 10, 20, 18, 12, 10, 10, 15]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '발령대장');
 
@@ -267,7 +272,7 @@ export function exportAllTransferNotices(
   doc.save(fileName);
 }
 
-// 발령대장 (PDF)
+// 발령대장 (PDF) - 원본 양식에 맞춤
 export function exportAssignmentListPDF(
   transfers: InternalTransfer[],
   settings: Record<string, string>
@@ -281,31 +286,46 @@ export function exportAssignmentListPDF(
 
   const officeName = settings.office_name || '양산교육지원청';
   const transferYear = settings.transfer_year || '2025';
+  const appointmentDate = settings.appointment_date || '2025-03-01';
 
   // 제목
   doc.setFontSize(16);
-  doc.text(`${transferYear}년도 교원 전보 발령대장`, 148.5, 15, { align: 'center' });
+  doc.text('발  령  대  장', 148.5, 15, { align: 'center' });
   doc.setFontSize(10);
-  doc.text(officeName, 148.5, 22, { align: 'center' });
+  doc.text(`${transferYear}년도 교원 전보 - ${officeName}`, 148.5, 22, { align: 'center' });
 
-  // 테이블 데이터
-  const tableData = assignedTransfers.map((t, index) => [
-    index + 1,
-    t.teacher_name,
-    t.gender || '',
+  // 테이블 데이터 - 원본 양식에 맞춤
+  const tableData = assignedTransfers.map((t) => [
+    appointmentDate,
     t.current_school_name || '',
-    t.assigned_school_name || '',
-    t.preference_round,
-    t.total_score,
+    '교사',
+    t.teacher_name,
+    `${t.assigned_school_name || ''} 발령`,
+    `${officeName} 교육장`,
+    '',
+    '',
+    '',
     t.note || '',
   ]);
 
   doc.autoTable({
     startY: 30,
-    head: [['순번', '성명', '성별', '현소속', '발령학교', '희망순위', '총점', '비고']],
-    body: tableData.length > 0 ? tableData : [['', '', '', '', '', '', '', '']],
-    styles: { fontSize: 9, cellPadding: 2 },
+    head: [['발령일자', '소속', '직급', '성명', '발령사항', '발령권자', '발령근거', '기재자', '확인자', '비고']],
+    body: tableData.length > 0 ? tableData : [['', '', '', '', '', '', '', '', '', '']],
+    styles: { fontSize: 8, cellPadding: 2 },
     headStyles: { fillColor: [66, 139, 202] },
+    columnStyles: {
+      0: { cellWidth: 22 },
+      1: { cellWidth: 30 },
+      2: { cellWidth: 15 },
+      3: { cellWidth: 20 },
+      4: { cellWidth: 40 },
+      5: { cellWidth: 35 },
+      6: { cellWidth: 25 },
+      7: { cellWidth: 20 },
+      8: { cellWidth: 20 },
+      9: { cellWidth: 30 },
+    },
   });
 
   const fileName = `발령대장_${transferYear}.pdf`;
