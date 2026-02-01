@@ -728,6 +728,105 @@ export default function Internal() {
     URL.revokeObjectURL(url);
   };
 
+  // 만기 미발령자 엑셀 다운로드
+  const handleDownloadExpiredUnassigned = async () => {
+    // 만기자 + 미배치 + 제외사유 없음
+    const expiredUnassigned = transfers.filter(
+      t => t.is_expired && !t.assigned_school_id && !t.exclusion_reason
+    );
+
+    if (expiredUnassigned.length === 0) {
+      alert('만기 미발령자가 없습니다.');
+      return;
+    }
+
+    // 정렬: 총점 높은순 → 동점자 서열 (tiebreaker_1 DESC → tiebreaker_2 DESC → tiebreaker_3 ASC)
+    const sorted = [...expiredUnassigned].sort((a, b) => {
+      if (b.total_score !== a.total_score) return b.total_score - a.total_score;
+      if (b.tiebreaker_1 !== a.tiebreaker_1) return b.tiebreaker_1 - a.tiebreaker_1;
+      if (b.tiebreaker_2 !== a.tiebreaker_2) return b.tiebreaker_2 - a.tiebreaker_2;
+      // tiebreaker_3 (생년월일)은 오름차순 (나이 많은 사람 우선)
+      if (a.tiebreaker_3 !== b.tiebreaker_3) return a.tiebreaker_3 - b.tiebreaker_3;
+      return 0;
+    });
+
+    const workbook = new ExcelJS.Workbook();
+    const ws = workbook.addWorksheet('만기미발령자');
+
+    // 스타일 정의
+    const yellowFill: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF9C4' } };
+    const thinBorder: Partial<ExcelJS.Borders> = {
+      top: { style: 'thin' }, bottom: { style: 'thin' },
+      left: { style: 'thin' }, right: { style: 'thin' }
+    };
+
+    // 헤더
+    const headers = ['순', '제외사유', '희망구분', '희망학교', '배정학교', '현임교', '성명', '성별', '생년월일', '만기여부', '1희망', '2희망', '3희망', '비고', '별도정원', '우선여부', '총점', '현임교근무', '경력점', '생년월일순'];
+
+    const headerRow = ws.getRow(1);
+    headers.forEach((h, idx) => {
+      const cell = headerRow.getCell(idx + 1);
+      cell.value = h;
+      cell.fill = yellowFill;
+      cell.border = thinBorder;
+      cell.font = { bold: true, size: 12 };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    });
+    headerRow.height = 18;
+
+    // 데이터 행
+    sorted.forEach((t, index) => {
+      const row = ws.getRow(index + 2);
+      row.height = 18;
+      const values = [
+        index + 1,
+        t.exclusion_reason || '',
+        t.preference_round || '',
+        getWishSchool(t)?.replace('초등학교', '') || '',
+        t.assigned_school_name?.replace('초등학교', '') || '',
+        t.current_school_name?.replace('초등학교', '') || '',
+        t.teacher_name || '',
+        t.gender || '',
+        t.birth_date?.replace(/-/g, '.') || '',
+        t.is_expired ? 'O' : '',
+        t.wish_school_1_name?.replace('초등학교', '') || '',
+        t.wish_school_2_name?.replace('초등학교', '') || '',
+        t.wish_school_3_name?.replace('초등학교', '') || '',
+        t.note || '',
+        t.separate_quota || '',
+        t.is_priority ? 'O' : '',
+        t.total_score || 0,
+        t.tiebreaker_1 || 0,
+        t.tiebreaker_2 || 0,
+        t.tiebreaker_3 || 0,
+      ];
+
+      values.forEach((v, idx) => {
+        const cell = row.getCell(idx + 1);
+        cell.value = v;
+        cell.border = thinBorder;
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        cell.font = { size: 12 };
+      });
+    });
+
+    // 열 너비
+    ws.columns.forEach((col) => {
+      col.width = 12;
+    });
+
+    // 파일 다운로드
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    a.download = `만기미발령자_${today}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const _handleReset = async () => {
     if (!confirm('모든 배치를 초기화하시겠습니까?')) return;
     setProcessing(true);
@@ -976,7 +1075,7 @@ export default function Internal() {
             <button
               onClick={handleCheckSurplus}
               disabled={processing}
-              className="px-2 py-1 text-xs bg-yellow-100 border border-yellow-400 hover:bg-yellow-200 disabled:opacity-50"
+              className="px-2 py-1 text-xs bg-white border hover:bg-gray-100 disabled:opacity-50"
             >
               3. 과원해소 점검
             </button>
@@ -1021,6 +1120,13 @@ export default function Internal() {
               className="px-2 py-1 text-xs bg-green-600 text-white border border-green-600 hover:bg-green-700 disabled:opacity-50"
             >
               📥 배치결과
+            </button>
+            <button
+              onClick={handleDownloadExpiredUnassigned}
+              disabled={processing || transfers.length === 0}
+              className="px-2 py-1 text-xs bg-orange-500 text-white border border-orange-500 hover:bg-orange-600 disabled:opacity-50"
+            >
+              📥 만기미발령
             </button>
           </div>
         </div>
