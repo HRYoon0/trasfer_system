@@ -657,6 +657,7 @@ export default function Internal() {
     // 데이터 행
     sortedTransfers.forEach((t, index) => {
       const row = ws.getRow(currentRow);
+      row.height = 18; // 행 높이 설정
       const values = [
         index + 1,
         t.exclusion_reason || '',
@@ -709,10 +710,9 @@ export default function Internal() {
       currentRow++;
     });
 
-    // 열 너비 통일 (생년월일 표시에 맞춤)
-    ws.columns.forEach((col, idx) => {
-      if (idx === 0) col.width = 4;        // 순
-      else col.width = 10;                  // 나머지 모두 동일
+    // 열 너비 통일
+    ws.columns.forEach((col) => {
+      col.width = 10;
     });
 
     // 파일 다운로드
