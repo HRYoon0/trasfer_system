@@ -1,16 +1,33 @@
 import { NavLink, Outlet } from 'react-router-dom';
+import {
+  BarChart3,
+  FileEdit,
+  School,
+  ClipboardList,
+  Star,
+  ArrowLeftRight,
+  FileInput,
+  Printer,
+  Settings,
+  type LucideIcon,
+} from 'lucide-react';
 
-const menuItems = [
-  { path: '/', label: '대시보드', icon: '📊' },
-  { path: '/statistics', label: '통계표', icon: '📈' },
-  { path: '/data-entry', label: '자료입력', icon: '📝' },
-  { path: '/schools', label: '학교관리', icon: '🏫' },
-  { path: '/vacancies', label: '결원/충원/관외전출', icon: '📋' },
-  { path: '/priority', label: '우선/유예/과원', icon: '⭐' },
-  { path: '/internal', label: '관내전출입', icon: '🔄' },
-  { path: '/external-in', label: '관외전입', icon: '📥' },
-  { path: '/documents', label: '문서출력', icon: '🖨️' },
-  { path: '/settings', label: '설정', icon: '⚙️' },
+interface MenuItem {
+  path: string;
+  label: string;
+  icon: LucideIcon;
+}
+
+const menuItems: MenuItem[] = [
+  { path: '/', label: '통계표', icon: BarChart3 },
+  { path: '/data-entry', label: '자료입력', icon: FileEdit },
+  { path: '/schools', label: '학교관리', icon: School },
+  { path: '/vacancies', label: '결원/충원/관외전출', icon: ClipboardList },
+  { path: '/priority', label: '우선/유예/과원', icon: Star },
+  { path: '/internal', label: '관내전출입', icon: ArrowLeftRight },
+  { path: '/external-in', label: '관외전입', icon: FileInput },
+  { path: '/documents', label: '문서출력', icon: Printer },
+  { path: '/settings', label: '설정', icon: Settings },
 ];
 
 export default function Layout() {
@@ -32,7 +49,7 @@ export default function Layout() {
                 `sidebar-item ${isActive ? 'active' : ''}`
               }
             >
-              <span className="text-xl">{item.icon}</span>
+              <item.icon className="w-5 h-5" />
               <span>{item.label}</span>
             </NavLink>
           ))}

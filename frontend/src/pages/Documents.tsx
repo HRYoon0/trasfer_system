@@ -19,6 +19,7 @@ import {
   exportAllTransferNotices,
 } from '../utils/documents';
 import type { InternalTransfer, ExternalOut, ExternalIn, SchoolShortage, School } from '../types';
+import { ClipboardList, FileText, PenLine, Building2 } from 'lucide-react';
 
 export default function Documents() {
   const [loading, setLoading] = useState(true);
@@ -187,7 +188,10 @@ export default function Documents() {
 
       {/* 1. 발령대장 */}
       <div className="card mb-6">
-        <h3 className="text-lg font-semibold mb-4">📋 발령대장</h3>
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          <ClipboardList className="w-5 h-5" />
+          발령대장
+        </h3>
         <div className="border rounded-lg p-4">
           <h4 className="font-medium mb-2">발령대장</h4>
           <p className="text-sm text-gray-500 mb-3">
@@ -201,7 +205,10 @@ export default function Documents() {
 
       {/* 2. 통지서 */}
       <div className="card mb-6">
-        <h3 className="text-lg font-semibold mb-4">📄 통지서</h3>
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          <FileText className="w-5 h-5" />
+          통지서
+        </h3>
         <div className="grid grid-cols-2 gap-4">
           {/* 관내 통지서 */}
           <div className="border rounded-lg p-4">
@@ -364,7 +371,10 @@ export default function Documents() {
 
       {/* 5. 임용서 */}
       <div className="card mb-6">
-        <h3 className="text-lg font-semibold mb-4">📝 임용서</h3>
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          <PenLine className="w-5 h-5" />
+          임용서
+        </h3>
         <div className="grid grid-cols-2 gap-4">
           <div className="border rounded-lg p-4">
             <h4 className="font-medium mb-2">임용서 (관내)</h4>
@@ -405,7 +415,10 @@ export default function Documents() {
 
       {/* 6. 학교별현황 */}
       <div className="card mb-6">
-        <h3 className="text-lg font-semibold mb-4">🏫 학교별 현황</h3>
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          <Building2 className="w-5 h-5" />
+          학교별 현황
+        </h3>
 
         {/* 학교 선택 */}
         <div className="mb-4">

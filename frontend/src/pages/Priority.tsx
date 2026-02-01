@@ -3,6 +3,7 @@ import { priorityApi, schoolApi, surplusApi } from '../services/api';
 import type { PriorityTransfer, SurplusTransfer, School } from '../types';
 import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
+import { Download, Upload } from 'lucide-react';
 
 // 탭 타입
 type TabType = 'priority' | 'surplus';
@@ -566,21 +567,21 @@ export default function Priority() {
           <h2 className="text-2xl font-bold text-gray-800">우선/유예/과원 관리</h2>
           <button
             onClick={handleCombinedDownload}
-            className="px-3 py-1.5 rounded text-sm bg-green-600 text-white hover:bg-green-700"
+            className="px-3 py-1.5 rounded text-sm bg-green-600 text-white hover:bg-green-700 flex items-center gap-1"
           >
-            📥 템플릿 다운로드
+            <Download className="w-4 h-4" /> 템플릿 다운로드
           </button>
           <button
             onClick={() => combinedFileRef.current?.click()}
-            className="px-3 py-1.5 rounded text-sm bg-blue-600 text-white hover:bg-blue-700"
+            className="px-3 py-1.5 rounded text-sm bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-1"
           >
-            📤 업로드
+            <Upload className="w-4 h-4" /> 업로드
           </button>
           <button
             onClick={handleDataDownload}
-            className="px-3 py-1.5 rounded text-sm bg-orange-500 text-white hover:bg-orange-600"
+            className="px-3 py-1.5 rounded text-sm bg-orange-500 text-white hover:bg-orange-600 flex items-center gap-1"
           >
-            📥 입력자료 다운로드
+            <Download className="w-4 h-4" /> 입력자료 다운로드
           </button>
         </div>
         {activeTab === 'priority' ? (

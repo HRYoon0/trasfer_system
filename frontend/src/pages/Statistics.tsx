@@ -11,6 +11,7 @@ import {
 } from '../services/api';
 import type { School, VacancyItem, ExternalOut, ExternalIn, InternalTransfer } from '../types';
 import { exportStatistics } from '../utils/documents';
+import { Settings, Download } from 'lucide-react';
 
 // 툴팁이 있는 셀 컴포넌트
 function TooltipCell({ value, items, className = '', noTooltip = false }: { value: number; items: string[]; className?: string; noTooltip?: boolean }) {
@@ -20,7 +21,6 @@ function TooltipCell({ value, items, className = '', noTooltip = false }: { valu
 
   if (!value) return <td className={`border px-1 py-1 text-center ${className}`}></td>;
 
-  // 툴팁 비활성화 시 숫자만 표시
   if (noTooltip) {
     return <td className={`border px-1 py-1 text-center ${className}`}>{value}</td>;
   }
@@ -82,7 +82,6 @@ export default function Statistics() {
         ]);
         setSchools(schoolsRes.data);
         setVacancies(vacanciesRes.data);
-        // 설정 로드
         setUseRemoteSchools(settingsRes.data.use_remote_schools === 'true');
         setRemoteSchools(settingsRes.data.remote_schools || '이천,원동,좌삼');
         setSupplements(supplementsRes.data);
@@ -98,17 +97,26 @@ export default function Statistics() {
     loadData();
   }, []);
 
-  // 학교별 통계 계산 (원본 엑셀 구조대로 단순하게)
+  // 학교별 통계 계산 (원본 엑셀 구조와 동일하게)
   const statistics = useMemo(() => {
     return schools.map((school, idx) => {
       const schoolVac = vacancies.filter(v => v.school_id === school.id);
       const schoolSup = supplements.filter(s => s.school_id === school.id);
       const schoolExtOut = externalOut.filter(e => e.school_id === school.id);
-      const schoolIntOut = internal.filter(t => t.current_school_id === school.id && t.assigned_school_id && t.assigned_school_id !== school.id);
+      // 원본 엑셀 BA7: (배정된 비만기자) + (만기자는 배정 여부 무관)
+      // COUNTIFS(현임교=$C7, 배정지<>"", 만기="", 제외="") + COUNTIFS(현임교=$C7, 만기="O", 제외="")
+      const schoolIntOut = internal.filter(t =>
+        t.current_school_id === school.id &&
+        !t.exclusion_reason &&
+        (
+          (t.assigned_school_id && t.assigned_school_id !== school.id && !t.is_expired) ||  // 배정된 비만기자
+          t.is_expired  // 만기자 (배정 여부 무관)
+        )
+      );
       const schoolIntIn = internal.filter(t => t.assigned_school_id === school.id && t.current_school_id !== school.id);
       const schoolExtIn = externalIn.filter(e => e.assigned_school_id === school.id);
 
-      // 결원 세부 (숫자와 명단) - 현임교 구분 이름 형식
+      // 결원 세부 (숫자와 명단)
       const getVacData = (type: string) => {
         const items = schoolVac.filter(v => v.type_code === type);
         return {
@@ -125,39 +133,56 @@ export default function Statistics() {
         };
       };
 
-      // 전출
-      const outCityData = schoolExtOut.filter(e => e.transfer_type === '타시도');
-      const outDistrictData = schoolExtOut.filter(e => e.transfer_type === '타시군');
-      const outInternalData = schoolIntOut;
-
-      // 전입
-      const inInternalData = schoolIntIn;
-      const inDistrictData = schoolExtIn.filter(e => e.transfer_type === '타시군');
-      const inCityData = schoolExtIn.filter(e => e.transfer_type === '타시도');
-      const inNewData = schoolExtIn.filter(e => e.transfer_type === '신규');
-
-      // 결원 데이터
+      // 결원 데이터 (원본 엑셀: 정퇴, 명퇴, 면직, 승진, 전직, 타시도복귀, 기타, 휴직, 파견)
       const vacRetireData = getVacData('정퇴');
       const vacEarlyData = getVacData('명퇴');
       const vacDismissData = getVacData('면직');
       const vacPromoteData = getVacData('승진');
       const vacTransferData = getVacData('전직');
-      const vacReturnData = getVacData('타시도복귀');
+      const vacReturnData = getVacData('타시도 복귀');
       const vacOtherData = getVacData('기타');
-      const vacSepItems = [...schoolVac.filter(v => v.type_code === '휴직'), ...schoolVac.filter(v => v.type_code === '파견')];
-      const vacSepData = { count: vacSepItems.length, names: vacSepItems.map(v => `${v.school_name || ''} ${v.type_name || v.type_code} ${v.teacher_name}`) };
+      const vacLeaveData = getVacData('휴직');
+      const vacDispatchData = getVacData('파견');
 
-      // 충원 데이터
-      const supReleaseItems = [...schoolSup.filter(s => s.type_code === '복직'), ...schoolSup.filter(s => s.type_code === '복귀')];
-      const supReleaseData = { count: supReleaseItems.length, names: supReleaseItems.map(s => `${s.school_name || ''} ${s.type_name || s.type_code} ${s.teacher_name}`) };
-      const supOtherData = getSupData('기타');
+      // 충원 데이터 (원본 엑셀: 복직, 복귀, 기타)
+      const supReinData = getSupData('복직');
+      const supReturnData = getSupData('복귀');
+      const supOtherData = getSupData('기타충원');
 
-      // 계산
-      const vacTotal = schoolVac.length;
-      const supTotal = schoolSup.length;
-      const outTotal = outCityData.length + outDistrictData.length + outInternalData.length;
-      const inTotal = inInternalData.length + inDistrictData.length + inCityData.length + inNewData.length;
-      const currentShortage = school.current_count - vacTotal + supTotal - outTotal + inTotal - school.quota;
+      // 전출 데이터
+      const outCityData = schoolExtOut.filter(e => e.transfer_type === '타시도');
+      const outDistrictData = schoolExtOut.filter(e => e.transfer_type === '타시군');
+      const outInternalData = schoolIntOut;
+      // 별도정원 전출 (원본 BD7: 관외전출 중 "타시군"만 + 관내전출)
+      // 원본 수식: 4관외전출에서 타시군+별도정원<>"" + 5관내전출입에서 O열(별도정원)<>""
+      const outSepExtData = schoolExtOut.filter(e => e.transfer_type === '타시군' && e.separate_quota && e.separate_quota.trim() !== '');
+      const outSepIntData = schoolIntOut.filter(t => t.separate_quota && t.separate_quota.trim() !== '');
+
+      // 전입 데이터
+      const inInternalData = schoolIntIn;
+      const inDistrictData = schoolExtIn.filter(e => e.transfer_type === '타시군');
+      const inCityData = schoolExtIn.filter(e => e.transfer_type === '타시도');
+      const inNewData = schoolExtIn.filter(e => e.transfer_type === '신규');
+      // 별도정원 전입 (원본 BT7: 관내전입 + 관외전입 중 "타시군"만)
+      // 원본 수식: 5관내전출입에서 O열<>"" + 6관외전입에서 타시군+G열(별도정원)<>""
+      const inSepExtData = schoolExtIn.filter(e => e.transfer_type === '타시군' && e.separate_quota && e.separate_quota.trim() !== '');
+      const inSepIntData = schoolIntIn.filter(t => t.separate_quota && t.separate_quota.trim() !== '');
+
+      // 계산 (원본 엑셀 수식 기반)
+      const vacTotal = vacRetireData.count + vacEarlyData.count + vacDismissData.count +
+                       vacPromoteData.count + vacTransferData.count + vacReturnData.count +
+                       vacOtherData.count + vacLeaveData.count + vacDispatchData.count;
+      const supTotal = supReinData.count + supReturnData.count + supOtherData.count;
+      // 전출계 = 타시도 + 타시군 + 관내 - 별도정원 (원본: =AW7+AZ7+BC7-BF7)
+      const outSepCount = outSepExtData.length + outSepIntData.length;
+      const outTotal = outCityData.length + outDistrictData.length + outInternalData.length - outSepCount;
+      // 전입계 = 관내 + 타시군 + 타시도 + 신규 - 별도정원 (원본: =BJ7+BM7+BP7+BS7-BV7)
+      const inSepCount = inSepExtData.length + inSepIntData.length;
+      const inTotal = inInternalData.length + inDistrictData.length + inCityData.length + inNewData.length - inSepCount;
+
+      // 현재 과부족 = 정현원과부족 - 결원계 + 충원계 - 전출계 + 전입계 (원본: =H7-AJ7+AT7-BG7+BW7)
+      const shortage = school.current_count - school.quota;
+      const currentShortage = shortage - vacTotal + supTotal - outTotal + inTotal;
 
       // 현원 남/여
       const currentMale = school.male_count || 0;
@@ -169,8 +194,8 @@ export default function Statistics() {
         name: school.name,
         currentCount: school.current_count,
         quota: school.quota,
-        shortage: school.current_count - school.quota,
-        // 결원 (숫자 + 명단)
+        shortage,
+        // 결원
         vacRetire: vacRetireData.count, vacRetireNames: vacRetireData.names,
         vacEarly: vacEarlyData.count, vacEarlyNames: vacEarlyData.names,
         vacDismiss: vacDismissData.count, vacDismissNames: vacDismissData.names,
@@ -178,23 +203,27 @@ export default function Statistics() {
         vacTransfer: vacTransferData.count, vacTransferNames: vacTransferData.names,
         vacReturn: vacReturnData.count, vacReturnNames: vacReturnData.names,
         vacOther: vacOtherData.count, vacOtherNames: vacOtherData.names,
-        vacSep: vacSepData.count, vacSepNames: vacSepData.names,
+        vacLeave: vacLeaveData.count, vacLeaveNames: vacLeaveData.names,
+        vacDispatch: vacDispatchData.count, vacDispatchNames: vacDispatchData.names,
         vacTotal, vacTotalNames: schoolVac.map(v => `${v.school_name || ''} ${v.type_name || v.type_code} ${v.teacher_name}`),
         // 충원
-        supRelease: supReleaseData.count, supReleaseNames: supReleaseData.names,
+        supRein: supReinData.count, supReinNames: supReinData.names,
+        supReturn: supReturnData.count, supReturnNames: supReturnData.names,
         supOther: supOtherData.count, supOtherNames: supOtherData.names,
         supTotal, supTotalNames: schoolSup.map(s => `${s.school_name || ''} ${s.type_name || s.type_code} ${s.teacher_name}`),
         // 전출
         outCity: outCityData.length, outCityNames: outCityData.map(e => `타시도 ${e.teacher_name}`),
         outDistrict: outDistrictData.length, outDistrictNames: outDistrictData.map(e => `타시군 ${e.teacher_name}`),
-        outInternal: outInternalData.length, outInternalNames: outInternalData.map(t => `관내 ${t.teacher_name}`),
-        outTotal, outTotalNames: [...outCityData.map(e => `타시도 ${e.teacher_name}`), ...outDistrictData.map(e => `타시군 ${e.teacher_name}`), ...outInternalData.map(t => `관내 ${t.teacher_name}`)],
+        outInternal: outInternalData.length, outInternalNames: outInternalData.map(t => `${t.assigned_school_name || ''} ${t.teacher_name}`),
+        outSep: outSepCount, outSepNames: [...outSepExtData.map(e => `별도 ${e.teacher_name}`), ...outSepIntData.map(t => `별도 ${t.teacher_name}`)],
+        outTotal, outTotalNames: [...outCityData.map(e => `타시도 ${e.teacher_name}`), ...outDistrictData.map(e => `타시군 ${e.teacher_name}`), ...outInternalData.map(t => `${t.assigned_school_name || ''} ${t.teacher_name}`)],
         // 전입
-        inInternal: inInternalData.length, inInternalNames: inInternalData.map(t => t.teacher_name),
-        inDistrict: inDistrictData.length, inDistrictNames: inDistrictData.map(e => e.teacher_name),
-        inCity: inCityData.length, inCityNames: inCityData.map(e => e.teacher_name),
-        inNew: inNewData.length, inNewNames: inNewData.map(e => e.teacher_name),
-        inTotal, inTotalNames: [...inInternalData.map(t => t.teacher_name), ...inDistrictData.map(e => e.teacher_name), ...inCityData.map(e => e.teacher_name), ...inNewData.map(e => e.teacher_name)],
+        inInternal: inInternalData.length, inInternalNames: inInternalData.map(t => `${t.current_school_name || ''} ${t.teacher_name}`),
+        inDistrict: inDistrictData.length, inDistrictNames: inDistrictData.map(e => `${e.origin_school || ''} ${e.teacher_name}`),
+        inCity: inCityData.length, inCityNames: inCityData.map(e => `${e.origin_school || ''} ${e.teacher_name}`),
+        inNew: inNewData.length, inNewNames: inNewData.map(e => `신규 ${e.teacher_name}`),
+        inSep: inSepCount, inSepNames: [...inSepExtData.map(e => `별도 ${e.teacher_name}`), ...inSepIntData.map(t => `별도 ${t.teacher_name}`)],
+        inTotal, inTotalNames: [...inInternalData.map(t => `${t.current_school_name || ''} ${t.teacher_name}`), ...inDistrictData.map(e => `${e.origin_school || ''} ${e.teacher_name}`), ...inCityData.map(e => `${e.origin_school || ''} ${e.teacher_name}`), ...inNewData.map(e => `신규 ${e.teacher_name}`)],
         // 현재 과부족
         currentShortage,
         // 남여성비
@@ -222,19 +251,23 @@ export default function Statistics() {
       vacTransfer: sum('vacTransfer'), vacTransferNames: collectNames('vacTransferNames'),
       vacReturn: sum('vacReturn'), vacReturnNames: collectNames('vacReturnNames'),
       vacOther: sum('vacOther'), vacOtherNames: collectNames('vacOtherNames'),
-      vacSep: sum('vacSep'), vacSepNames: collectNames('vacSepNames'),
+      vacLeave: sum('vacLeave'), vacLeaveNames: collectNames('vacLeaveNames'),
+      vacDispatch: sum('vacDispatch'), vacDispatchNames: collectNames('vacDispatchNames'),
       vacTotal: sum('vacTotal'), vacTotalNames: collectNames('vacTotalNames'),
-      supRelease: sum('supRelease'), supReleaseNames: collectNames('supReleaseNames'),
+      supRein: sum('supRein'), supReinNames: collectNames('supReinNames'),
+      supReturn: sum('supReturn'), supReturnNames: collectNames('supReturnNames'),
       supOther: sum('supOther'), supOtherNames: collectNames('supOtherNames'),
       supTotal: sum('supTotal'), supTotalNames: collectNames('supTotalNames'),
       outCity: sum('outCity'), outCityNames: collectNames('outCityNames'),
       outDistrict: sum('outDistrict'), outDistrictNames: collectNames('outDistrictNames'),
       outInternal: sum('outInternal'), outInternalNames: collectNames('outInternalNames'),
+      outSep: sum('outSep'), outSepNames: collectNames('outSepNames'),
       outTotal: sum('outTotal'), outTotalNames: collectNames('outTotalNames'),
       inInternal: sum('inInternal'), inInternalNames: collectNames('inInternalNames'),
       inDistrict: sum('inDistrict'), inDistrictNames: collectNames('inDistrictNames'),
       inCity: sum('inCity'), inCityNames: collectNames('inCityNames'),
       inNew: sum('inNew'), inNewNames: collectNames('inNewNames'),
+      inSep: sum('inSep'), inSepNames: collectNames('inSepNames'),
       inTotal: sum('inTotal'), inTotalNames: collectNames('inTotalNames'),
       currentShortage: sum('currentShortage'),
       male: totalM, female: totalF,
@@ -248,7 +281,6 @@ export default function Statistics() {
     catch (error) { console.error('내보내기 실패:', error); alert('통계표 내보내기에 실패했습니다.'); }
   };
 
-  // 설정 저장
   const handleSaveSettings = async () => {
     setSettingsSaving(true);
     try {
@@ -278,10 +310,10 @@ export default function Statistics() {
         </div>
         <div className="flex gap-2">
           <button onClick={() => setShowSettingsMenu(true)} className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">
-            <span>⚙️</span><span>설정 메뉴</span>
+            <Settings className="w-4 h-4" /><span>설정 메뉴</span>
           </button>
           <button onClick={handleExport} className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">
-            <span>⬇️</span><span>엑셀 다운로드</span>
+            <Download className="w-4 h-4" /><span>엑셀 다운로드</span>
           </button>
         </div>
       </div>
@@ -291,8 +323,6 @@ export default function Statistics() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-96 shadow-xl">
             <h2 className="text-lg font-bold mb-4">설정 메뉴</h2>
-
-            {/* 통합(벽지) 사용 토글 */}
             <div className="mb-4">
               <label className="flex items-center gap-3 cursor-pointer">
                 <input
@@ -307,13 +337,9 @@ export default function Statistics() {
                 관내전출입에서 통합(벽지) 희망 열을 활성화합니다.
               </p>
             </div>
-
-            {/* 통합(벽지) 학교 목록 */}
             {useRemoteSchools && (
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  통합(벽지) 학교 목록
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">통합(벽지) 학교 목록</label>
                 <input
                   type="text"
                   value={remoteSchools}
@@ -321,27 +347,14 @@ export default function Statistics() {
                   placeholder="이천,원동,좌삼"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
-                <p className="text-sm text-gray-500 mt-1">
-                  쉼표(,)로 구분하여 입력하세요.
-                </p>
+                <p className="text-sm text-gray-500 mt-1">쉼표(,)로 구분하여 입력하세요.</p>
               </div>
             )}
-
-            {/* 버튼 */}
             <div className="flex gap-2 mt-6">
-              <button
-                onClick={handleSaveSettings}
-                disabled={settingsSaving}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-              >
+              <button onClick={handleSaveSettings} disabled={settingsSaving} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
                 {settingsSaving ? '저장 중...' : '저장'}
               </button>
-              <button
-                onClick={() => setShowSettingsMenu(false)}
-                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
-              >
-                취소
-              </button>
+              <button onClick={() => setShowSettingsMenu(false)} className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">취소</button>
             </div>
           </div>
         </div>
@@ -358,10 +371,10 @@ export default function Statistics() {
                 <th rowSpan={2} className="border px-2 py-1">현원</th>
                 <th rowSpan={2} className="border px-2 py-1">정원</th>
                 <th rowSpan={2} className="border px-2 py-1">과부족</th>
-                <th colSpan={9} className="border px-1 py-1 bg-yellow-200">결원</th>
-                <th colSpan={3} className="border px-1 py-1 bg-green-200">충원</th>
-                <th colSpan={4} className="border px-1 py-1 bg-red-200">전출</th>
-                <th colSpan={5} className="border px-1 py-1 bg-blue-200">전입</th>
+                <th colSpan={10} className="border px-1 py-1 bg-yellow-200">결원</th>
+                <th colSpan={4} className="border px-1 py-1 bg-green-200">충원</th>
+                <th colSpan={5} className="border px-1 py-1 bg-red-200">전출</th>
+                <th colSpan={6} className="border px-1 py-1 bg-blue-200">전입</th>
                 <th rowSpan={2} className="border px-1 py-1 bg-purple-200">현재<br/>과부족</th>
                 <th colSpan={4} className="border px-1 py-1 bg-orange-200">남여성비</th>
               </tr>
@@ -375,22 +388,26 @@ export default function Statistics() {
                 <th className="border px-1 bg-yellow-100">전직</th>
                 <th className="border px-1 bg-yellow-100 text-[10px]">타시도<br/>복귀</th>
                 <th className="border px-1 bg-yellow-100">기타</th>
-                <th className="border px-1 bg-yellow-100 text-[10px]">별도<br/>정원</th>
+                <th className="border px-1 bg-yellow-100">휴직</th>
+                <th className="border px-1 bg-yellow-100">파견</th>
                 <th className="border px-1 bg-yellow-300">계</th>
                 {/* 충원 */}
-                <th className="border px-1 bg-green-100 text-[10px]">별도정원<br/>해제</th>
+                <th className="border px-1 bg-green-100">복직</th>
+                <th className="border px-1 bg-green-100">복귀</th>
                 <th className="border px-1 bg-green-100">기타</th>
                 <th className="border px-1 bg-green-300">계</th>
                 {/* 전출 */}
                 <th className="border px-1 bg-red-100">타시도</th>
                 <th className="border px-1 bg-red-100">타시군</th>
                 <th className="border px-1 bg-red-100">관내</th>
+                <th className="border px-1 bg-red-100 text-[10px]">별도<br/>정원</th>
                 <th className="border px-1 bg-red-300">계</th>
                 {/* 전입 */}
                 <th className="border px-1 bg-blue-100">관내</th>
                 <th className="border px-1 bg-blue-100">타시군</th>
                 <th className="border px-1 bg-blue-100">타시도</th>
                 <th className="border px-1 bg-blue-100">신규</th>
+                <th className="border px-1 bg-blue-100 text-[10px]">별도<br/>정원</th>
                 <th className="border px-1 bg-blue-300">계</th>
                 {/* 남여성비 */}
                 <th className="border px-1 bg-orange-100">남</th>
@@ -415,22 +432,26 @@ export default function Statistics() {
                 <TooltipCell value={totals.vacTransfer} items={totals.vacTransferNames} className="bg-yellow-50" noTooltip />
                 <TooltipCell value={totals.vacReturn} items={totals.vacReturnNames} className="bg-yellow-50" noTooltip />
                 <TooltipCell value={totals.vacOther} items={totals.vacOtherNames} className="bg-yellow-50" noTooltip />
-                <TooltipCell value={totals.vacSep} items={totals.vacSepNames} className="bg-yellow-50" noTooltip />
+                <TooltipCell value={totals.vacLeave} items={totals.vacLeaveNames} className="bg-yellow-50" noTooltip />
+                <TooltipCell value={totals.vacDispatch} items={totals.vacDispatchNames} className="bg-yellow-50" noTooltip />
                 <TooltipCell value={totals.vacTotal} items={totals.vacTotalNames} className="bg-yellow-200" noTooltip />
                 {/* 충원 */}
-                <TooltipCell value={totals.supRelease} items={totals.supReleaseNames} className="bg-green-50" noTooltip />
+                <TooltipCell value={totals.supRein} items={totals.supReinNames} className="bg-green-50" noTooltip />
+                <TooltipCell value={totals.supReturn} items={totals.supReturnNames} className="bg-green-50" noTooltip />
                 <TooltipCell value={totals.supOther} items={totals.supOtherNames} className="bg-green-50" noTooltip />
                 <TooltipCell value={totals.supTotal} items={totals.supTotalNames} className="bg-green-200" noTooltip />
                 {/* 전출 */}
                 <TooltipCell value={totals.outCity} items={totals.outCityNames} className="bg-red-50" noTooltip />
                 <TooltipCell value={totals.outDistrict} items={totals.outDistrictNames} className="bg-red-50" noTooltip />
                 <TooltipCell value={totals.outInternal} items={totals.outInternalNames} className="bg-red-50" noTooltip />
+                <TooltipCell value={totals.outSep} items={totals.outSepNames} className="bg-red-50" noTooltip />
                 <TooltipCell value={totals.outTotal} items={totals.outTotalNames} className="bg-red-200" noTooltip />
                 {/* 전입 */}
                 <TooltipCell value={totals.inInternal} items={totals.inInternalNames} className="bg-blue-50" noTooltip />
                 <TooltipCell value={totals.inDistrict} items={totals.inDistrictNames} className="bg-blue-50" noTooltip />
                 <TooltipCell value={totals.inCity} items={totals.inCityNames} className="bg-blue-50" noTooltip />
                 <TooltipCell value={totals.inNew} items={totals.inNewNames} className="bg-blue-50" noTooltip />
+                <TooltipCell value={totals.inSep} items={totals.inSepNames} className="bg-blue-50" noTooltip />
                 <TooltipCell value={totals.inTotal} items={totals.inTotalNames} className="bg-blue-200" noTooltip />
                 {/* 현재 과부족 */}
                 <td className={`border px-1 py-1 text-center font-bold ${totals.currentShortage < 0 ? 'text-red-600 bg-red-50' : totals.currentShortage > 0 ? 'text-blue-600 bg-blue-50' : 'bg-purple-100'}`}>{v(totals.currentShortage)}</td>
@@ -456,22 +477,26 @@ export default function Statistics() {
                   <TooltipCell value={s.vacTransfer} items={s.vacTransferNames} />
                   <TooltipCell value={s.vacReturn} items={s.vacReturnNames} />
                   <TooltipCell value={s.vacOther} items={s.vacOtherNames} />
-                  <TooltipCell value={s.vacSep} items={s.vacSepNames} />
+                  <TooltipCell value={s.vacLeave} items={s.vacLeaveNames} />
+                  <TooltipCell value={s.vacDispatch} items={s.vacDispatchNames} />
                   <TooltipCell value={s.vacTotal} items={s.vacTotalNames} className="bg-yellow-50" />
                   {/* 충원 */}
-                  <TooltipCell value={s.supRelease} items={s.supReleaseNames} />
+                  <TooltipCell value={s.supRein} items={s.supReinNames} />
+                  <TooltipCell value={s.supReturn} items={s.supReturnNames} />
                   <TooltipCell value={s.supOther} items={s.supOtherNames} />
                   <TooltipCell value={s.supTotal} items={s.supTotalNames} className="bg-green-50" />
                   {/* 전출 */}
                   <TooltipCell value={s.outCity} items={s.outCityNames} />
                   <TooltipCell value={s.outDistrict} items={s.outDistrictNames} />
                   <TooltipCell value={s.outInternal} items={s.outInternalNames} />
+                  <TooltipCell value={s.outSep} items={s.outSepNames} />
                   <TooltipCell value={s.outTotal} items={s.outTotalNames} className="bg-red-50" />
                   {/* 전입 */}
                   <TooltipCell value={s.inInternal} items={s.inInternalNames} />
                   <TooltipCell value={s.inDistrict} items={s.inDistrictNames} />
                   <TooltipCell value={s.inCity} items={s.inCityNames} />
                   <TooltipCell value={s.inNew} items={s.inNewNames} />
+                  <TooltipCell value={s.inSep} items={s.inSepNames} />
                   <TooltipCell value={s.inTotal} items={s.inTotalNames} className="bg-blue-50" />
                   {/* 현재 과부족 */}
                   <td className={`border px-1 py-1 text-center font-bold ${s.currentShortage < 0 ? 'text-red-600 bg-red-50' : s.currentShortage > 0 ? 'text-blue-600 bg-blue-50' : 'bg-purple-50'}`}>{v(s.currentShortage)}</td>

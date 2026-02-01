@@ -11,6 +11,7 @@ import {
   parseDataTemplate,
 } from '../utils/documents';
 import type { School } from '../types';
+import { Download, Info, Lightbulb } from 'lucide-react';
 
 export default function DataEntry() {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -213,7 +214,10 @@ export default function DataEntry() {
 
       {/* 자료 입력 템플릿 */}
       <div className="card mb-6 border-2 border-blue-300 bg-blue-50">
-        <h3 className="text-lg font-semibold mb-4">📥 자료 입력 템플릿</h3>
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          <Download className="w-5 h-5" />
+          자료 입력 템플릿
+        </h3>
         <p className="text-sm text-gray-600 mb-4">
           학교관리, 결원, 충원, 관외전출 자료를 한 번에 입력할 수 있습니다.
           템플릿을 다운로드하여 작성 후 업로드하세요.
@@ -255,7 +259,10 @@ export default function DataEntry() {
 
       {/* 사용 안내 */}
       <div className="card">
-        <h3 className="text-lg font-semibold mb-4">📌 사용 안내</h3>
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          <Info className="w-5 h-5" />
+          사용 안내
+        </h3>
         <div className="space-y-3 text-sm text-gray-600">
           <div className="flex items-start gap-2">
             <span className="font-bold text-blue-600">1.</span>
@@ -275,7 +282,7 @@ export default function DataEntry() {
           </div>
           <div className="mt-4 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
             <p className="text-yellow-800">
-              <strong>💡 TIP:</strong> 결원/충원/관외전출 시트의 <strong>현임교</strong> 열은
+              <strong className="flex items-center gap-1 inline-flex"><Lightbulb className="w-4 h-4" /> TIP:</strong> 결원/충원/관외전출 시트의 <strong>현임교</strong> 열은
               드롭다운에서 1정현원에 입력한 학교를 선택할 수 있습니다.
             </p>
           </div>

@@ -3,6 +3,7 @@ import { internalApi, schoolApi, assignmentApi, settingsApi } from '../services/
 import type { InternalTransfer, School, AssignmentStats, SchoolShortage } from '../types';
 import * as XLSX from 'xlsx';  // 엑셀 파일 읽기용
 import ExcelJS from 'exceljs'; // 엑셀 파일 쓰기(스타일 포함)용
+import { Download } from 'lucide-react';
 
 // 정렬 타입
 type SortType = 'score' | 'school';
@@ -1117,16 +1118,16 @@ export default function Internal() {
             <button
               onClick={handleDownloadExcel}
               disabled={processing || transfers.length === 0}
-              className="px-2 py-1 text-xs bg-green-600 text-white border border-green-600 hover:bg-green-700 disabled:opacity-50"
+              className="px-2 py-1 text-xs bg-green-600 text-white border border-green-600 hover:bg-green-700 disabled:opacity-50 flex items-center gap-1"
             >
-              📥 배치결과
+              <Download className="w-3 h-3" /> 배치결과
             </button>
             <button
               onClick={handleDownloadExpiredUnassigned}
               disabled={processing || transfers.length === 0}
-              className="px-2 py-1 text-xs bg-orange-500 text-white border border-orange-500 hover:bg-orange-600 disabled:opacity-50"
+              className="px-2 py-1 text-xs bg-orange-500 text-white border border-orange-500 hover:bg-orange-600 disabled:opacity-50 flex items-center gap-1"
             >
-              📥 만기미발령
+              <Download className="w-3 h-3" /> 만기미발령
             </button>
           </div>
         </div>
