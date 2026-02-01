@@ -313,31 +313,31 @@ export default function Priority() {
       cell.font = { bold: true, size: 11 };
       cell.alignment = { horizontal: 'center', vertical: 'middle' };
     });
-    sortedData.forEach((item, index) => {
-      const row = ws1.getRow(index + 2);
-      [index + 1, item.type_code || '', item.school_name || '', item.teacher_name || '', item.gender || '', item.birth_date || '', item.total_score ?? '', item.note || ''].forEach((v, idx) => {
-        const cell = row.getCell(idx + 1);
-        cell.value = v;
-        cell.border = thinBorder;
-        cell.alignment = { horizontal: 'center', vertical: 'middle' };
-      });
-    });
-    ws1.columns.forEach((col) => { col.width = 12; });
-    // 드롭다운 설정 (2행~100행)
-    for (let i = 2; i <= 100; i++) {
+    // 빈 템플릿 (순번 1~100)
+    for (let i = 1; i <= 100; i++) {
+      const row = ws1.getRow(i + 1);
+      row.getCell(1).value = i; // 순번
+      row.getCell(1).border = thinBorder;
+      row.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+      // 나머지 셀 테두리
+      for (let j = 2; j <= 8; j++) {
+        row.getCell(j).border = thinBorder;
+        row.getCell(j).alignment = { horizontal: 'center', vertical: 'middle' };
+      }
       // 구분 열(B) 드롭다운
-      ws1.getCell(`B${i}`).dataValidation = {
+      ws1.getCell(`B${i + 1}`).dataValidation = {
         type: 'list',
         allowBlank: true,
         formulae: ['"우선,전보유예"']
       };
       // 성별 열(E) 드롭다운
-      ws1.getCell(`E${i}`).dataValidation = {
+      ws1.getCell(`E${i + 1}`).dataValidation = {
         type: 'list',
         allowBlank: true,
         formulae: ['"남,여"']
       };
     }
+    ws1.columns.forEach((col) => { col.width = 12; });
 
     // 시트2: 과원
     const ws2 = workbook.addWorksheet('과원');
@@ -351,38 +351,38 @@ export default function Priority() {
       cell.font = { bold: true, size: 11 };
       cell.alignment = { horizontal: 'center', vertical: 'middle' };
     });
-    sortedSurpluses.forEach((item, index) => {
-      const row = ws2.getRow(index + 2);
-      [index + 1, item.school_name || '', item.teacher_name || '', item.surplus_number ?? '', item.stay_current ? 'O' : '', item.gender || '', item.birth_date || '', item.note || ''].forEach((v, idx) => {
-        const cell = row.getCell(idx + 1);
-        cell.value = v;
-        cell.border = thinBorder;
-        cell.alignment = { horizontal: 'center', vertical: 'middle' };
-      });
-    });
-    ws2.columns.forEach((col) => { col.width = 12; });
-    // 드롭다운 설정 (2행~100행)
-    for (let i = 2; i <= 100; i++) {
+    // 빈 템플릿 (순번 1~100)
+    for (let i = 1; i <= 100; i++) {
+      const row = ws2.getRow(i + 1);
+      row.getCell(1).value = i; // 순번
+      row.getCell(1).border = thinBorder;
+      row.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+      // 나머지 셀 테두리
+      for (let j = 2; j <= 8; j++) {
+        row.getCell(j).border = thinBorder;
+        row.getCell(j).alignment = { horizontal: 'center', vertical: 'middle' };
+      }
       // 현학교남기 열(E) 드롭다운
-      ws2.getCell(`E${i}`).dataValidation = {
+      ws2.getCell(`E${i + 1}`).dataValidation = {
         type: 'list',
         allowBlank: true,
         formulae: ['"O"']
       };
       // 성별 열(F) 드롭다운
-      ws2.getCell(`F${i}`).dataValidation = {
+      ws2.getCell(`F${i + 1}`).dataValidation = {
         type: 'list',
         allowBlank: true,
         formulae: ['"남,여"']
       };
     }
+    ws2.columns.forEach((col) => { col.width = 12; });
 
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `우선유예과원_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.xlsx`;
+    a.download = `우선유예과원_템플릿.xlsx`;
     a.click();
     URL.revokeObjectURL(url);
   };
