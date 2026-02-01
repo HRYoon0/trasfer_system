@@ -846,3 +846,80 @@ export async function parseDataTemplate(file: File): Promise<TemplateParseResult
 
   return result;
 }
+
+// =====================================================
+// 입력자료 다운로드 (템플릿에 데이터 채워서 다운로드)
+// =====================================================
+export async function downloadDataWithTemplate(
+  schools: any[],
+  vacancies: any[],
+  supplements: any[],
+  externalOuts: any[]
+) {
+  // 원본 템플릿 파일 로드
+  const workbook = await loadTemplate('/templates/data_entry_template.xlsx');
+
+  // 1정현원 시트: 5행부터, B:코드, C:학교명, D:남, E:여, G:정원
+  const wsSchool = workbook.getWorksheet('1정현원');
+  if (wsSchool) {
+    // 정렬
+    const sortedSchools = [...schools].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+    sortedSchools.forEach((s, i) => {
+      const row = i + 5; // 5행부터
+      wsSchool.getCell(`B${row}`).value = s.display_order || s.id;
+      wsSchool.getCell(`C${row}`).value = s.name;
+      wsSchool.getCell(`D${row}`).value = s.male_count || 0;
+      wsSchool.getCell(`E${row}`).value = s.female_count || 0;
+      wsSchool.getCell(`G${row}`).value = s.quota || 0;
+    });
+  }
+
+  // 2결원 시트: 3행부터, A:순, B:구분, C:현임교, D:성명, E:성별, F:생년월일, G:비고
+  const wsVacancy = workbook.getWorksheet('2결원');
+  if (wsVacancy) {
+    vacancies.forEach((v, i) => {
+      const row = i + 3;
+      wsVacancy.getCell(`A${row}`).value = i + 1;
+      wsVacancy.getCell(`B${row}`).value = v.type_name || v.type_code || '';
+      wsVacancy.getCell(`C${row}`).value = v.school_name || '';
+      wsVacancy.getCell(`D${row}`).value = v.teacher_name || '';
+      wsVacancy.getCell(`E${row}`).value = v.gender || '';
+      wsVacancy.getCell(`F${row}`).value = v.birth_date || '';
+      wsVacancy.getCell(`G${row}`).value = v.note || '';
+    });
+  }
+
+  // 3충원 시트: 3행부터, A:순, B:구분, C:현임교, D:성명, E:성별, F:생년월일, G:비고
+  const wsSupplement = workbook.getWorksheet('3충원');
+  if (wsSupplement) {
+    supplements.forEach((s, i) => {
+      const row = i + 3;
+      wsSupplement.getCell(`A${row}`).value = i + 1;
+      wsSupplement.getCell(`B${row}`).value = s.type_name || s.type_code || '';
+      wsSupplement.getCell(`C${row}`).value = s.school_name || '';
+      wsSupplement.getCell(`D${row}`).value = s.teacher_name || '';
+      wsSupplement.getCell(`E${row}`).value = s.gender || '';
+      wsSupplement.getCell(`F${row}`).value = s.birth_date || '';
+      wsSupplement.getCell(`G${row}`).value = s.note || '';
+    });
+  }
+
+  // 4관외전출 시트: 3행부터, A:순, B:구분, C:현임교, D:성명, E:성별, F:생년월일, G:전출지, H:별도정원, I:비고
+  const wsExternalOut = workbook.getWorksheet('4관외전출');
+  if (wsExternalOut) {
+    externalOuts.forEach((e, i) => {
+      const row = i + 3;
+      wsExternalOut.getCell(`A${row}`).value = i + 1;
+      wsExternalOut.getCell(`B${row}`).value = e.transfer_type || '';
+      wsExternalOut.getCell(`C${row}`).value = e.school_name || '';
+      wsExternalOut.getCell(`D${row}`).value = e.teacher_name || '';
+      wsExternalOut.getCell(`E${row}`).value = e.gender || '';
+      wsExternalOut.getCell(`F${row}`).value = e.birth_date || '';
+      wsExternalOut.getCell(`G${row}`).value = e.destination || '';
+      wsExternalOut.getCell(`H${row}`).value = e.separate_quota || '';
+      wsExternalOut.getCell(`I${row}`).value = e.note || '';
+    });
+  }
+
+  await downloadWorkbook(workbook, `자료입력_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.xlsx`);
+}

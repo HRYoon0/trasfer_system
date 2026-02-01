@@ -7,6 +7,7 @@ import {
 } from '../services/api';
 import {
   downloadDataTemplate,
+  downloadDataWithTemplate,
   parseDataTemplate,
 } from '../utils/documents';
 import type { School } from '../types';
@@ -18,6 +19,33 @@ export default function DataEntry() {
   // 템플릿 다운로드
   const handleDownloadTemplate = async () => {
     await downloadDataTemplate();
+  };
+
+  // 입력자료 다운로드 (템플릿 형식으로)
+  const handleDownloadData = async () => {
+    try {
+      const [schoolsRes, vacanciesRes, supplementsRes, externalOutsRes] = await Promise.all([
+        schoolApi.getAll(),
+        vacancyApi.getAll(),
+        supplementApi.getAll(),
+        externalOutApi.getAll(),
+      ]);
+
+      const schools = schoolsRes.data || [];
+      const vacancies = vacanciesRes.data || [];
+      const supplements = supplementsRes.data || [];
+      const externalOuts = externalOutsRes.data || [];
+
+      if (schools.length === 0 && vacancies.length === 0 && supplements.length === 0 && externalOuts.length === 0) {
+        alert('다운로드할 데이터가 없습니다.');
+        return;
+      }
+
+      await downloadDataWithTemplate(schools, vacancies, supplements, externalOuts);
+    } catch (error) {
+      console.error('다운로드 실패:', error);
+      alert('데이터 다운로드 중 오류가 발생했습니다.');
+    }
   };
 
   // 템플릿 업로드 처리
@@ -190,7 +218,7 @@ export default function DataEntry() {
           학교관리, 결원, 충원, 관외전출 자료를 한 번에 입력할 수 있습니다.
           템플릿을 다운로드하여 작성 후 업로드하세요.
         </p>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-4">
           <div className="border rounded-lg p-4 bg-white">
             <h4 className="font-medium mb-2">1. 템플릿 다운로드</h4>
             <p className="text-sm text-gray-500 mb-3">
@@ -211,6 +239,15 @@ export default function DataEntry() {
               className="btn btn-success"
             >
               {uploading ? '업로드 중...' : '템플릿 업로드'}
+            </button>
+          </div>
+          <div className="border rounded-lg p-4 bg-white">
+            <h4 className="font-medium mb-2">3. 입력자료 다운로드</h4>
+            <p className="text-sm text-gray-500 mb-3">
+              현재 저장된 자료를 엑셀로 다운로드합니다
+            </p>
+            <button onClick={handleDownloadData} className="btn bg-orange-500 hover:bg-orange-600 text-white">
+              입력자료 다운로드
             </button>
           </div>
         </div>
