@@ -666,7 +666,7 @@ export default function Internal() {
         t.current_school_name?.replace('초등학교', '') || '',
         t.teacher_name || '',
         t.gender || '',
-        t.birth_date || '',
+        t.birth_date?.replace(/-/g, '.') || '',
         t.is_expired ? 'O' : '',
         t.wish_school_1_name?.replace('초등학교', '') || '',
         t.wish_school_2_name?.replace('초등학교', '') || '',
@@ -709,9 +709,12 @@ export default function Internal() {
       currentRow++;
     });
 
-    // 열 너비 자동 조정
+    // 열 너비 자동 조정 (생년월일 열은 넓게)
     ws.columns.forEach((col, idx) => {
-      col.width = idx === 0 ? 5 : idx === 6 ? 10 : 8;
+      if (idx === 0) col.width = 5;        // 순
+      else if (idx === 6) col.width = 10;  // 성명
+      else if (idx === 8) col.width = 12;  // 생년월일
+      else col.width = 8;
     });
 
     // 파일 다운로드
