@@ -685,7 +685,8 @@ export default function Internal() {
         const cell = row.getCell(idx + 1);
         cell.value = v;
         cell.border = thinBorder;
-        cell.alignment = { horizontal: 'center' };
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        cell.font = { size: 12 }; // 폰트 크기
       });
 
       // 조건부 스타일
@@ -693,7 +694,7 @@ export default function Internal() {
         // 제외사유 있으면 회색
         values.forEach((_, idx) => {
           row.getCell(idx + 1).fill = grayFill;
-          row.getCell(idx + 1).font = { color: { argb: 'FF888888' } };
+          row.getCell(idx + 1).font = { size: 12, color: { argb: 'FF888888' } };
         });
       } else if (t.assigned_school_id) {
         // 배정학교 있으면 연녹색
@@ -704,7 +705,7 @@ export default function Internal() {
 
       // 배정학교 셀 강조
       if (t.assigned_school_id && !t.exclusion_reason) {
-        row.getCell(5).font = { bold: true, color: { argb: 'FF2E7D32' } };
+        row.getCell(5).font = { size: 12, bold: true, color: { argb: 'FF2E7D32' } };
       }
 
       currentRow++;
@@ -866,7 +867,7 @@ export default function Internal() {
                   <tr className="bg-yellow-100">
                     <td className="border border-yellow-300 px-1 py-0.5 font-medium text-center whitespace-nowrap bg-yellow-200 w-16">학교코드</td>
                     {group.map((s, idx) => (
-                      <td key={s.id} className="border border-yellow-300 px-1 py-0.5 text-center whitespace-nowrap min-w-[32px] text-gray-500">
+                      <td key={s.id} className="border border-yellow-300 px-1 py-1.5 text-center align-middle text-sm whitespace-nowrap min-w-[32px] text-gray-500">
                         {groupIdx * 25 + idx + 1}
                       </td>
                     ))}
@@ -875,7 +876,7 @@ export default function Internal() {
                   <tr className="bg-yellow-50">
                     <td className="border border-yellow-300 px-1 py-0.5 font-medium text-center whitespace-nowrap bg-yellow-200">학교명</td>
                     {group.map(s => (
-                      <td key={s.id} className="border border-yellow-300 px-1 py-0.5 text-center whitespace-nowrap text-xs">
+                      <td key={s.id} className="border border-yellow-300 px-1 py-1.5 text-center align-middle text-sm whitespace-nowrap text-xs">
                         {s.name.replace('초등학교', '').replace('초', '')}
                       </td>
                     ))}
@@ -886,7 +887,7 @@ export default function Internal() {
                     {group.map(s => (
                       <td
                         key={s.id}
-                        className={`border border-yellow-300 px-1 py-0.5 text-center font-bold ${
+                        className={`border border-yellow-300 px-1 py-1.5 text-center align-middle text-sm font-bold ${
                           s.shortage < 0 ? 'text-red-600 bg-red-50' : s.shortage > 0 ? 'text-blue-600 bg-blue-50' : ''
                         }`}
                       >
@@ -1067,9 +1068,9 @@ export default function Internal() {
             </tr>
             {/* 두 번째 헤더 행 - 동점자 서열 세부 */}
             <tr>
-              <th className="border border-gray-300 px-1 py-0.5 text-center w-14 bg-blue-50 text-[10px]">2_현임교<br/>근무년수</th>
-              <th className="border border-gray-300 px-1 py-0.5 text-center w-12 bg-blue-50 text-[10px]">2_경력점</th>
-              <th className="border border-gray-300 px-1 py-0.5 text-center w-14 bg-blue-50 text-[10px]">1_생년월일</th>
+              <th className="border border-gray-300 px-1 py-1.5 text-center align-middle text-sm w-14 bg-blue-50 text-[10px]">2_현임교<br/>근무년수</th>
+              <th className="border border-gray-300 px-1 py-1.5 text-center align-middle text-sm w-12 bg-blue-50 text-[10px]">2_경력점</th>
+              <th className="border border-gray-300 px-1 py-1.5 text-center align-middle text-sm w-14 bg-blue-50 text-[10px]">1_생년월일</th>
             </tr>
           </thead>
           <tbody>
@@ -1086,15 +1087,15 @@ export default function Internal() {
                   className={`hover:bg-blue-50 ${t.exclusion_reason ? 'bg-gray-200 text-gray-400' : ''} ${t.assigned_school_id ? 'bg-green-50' : ''}`}
                 >
                   {/* 순 */}
-                  <td className="border border-gray-300 px-1 py-0.5 text-center">{index + 1}</td>
+                  <td className="border border-gray-300 px-1 py-1.5 text-center align-middle text-sm">{index + 1}</td>
                   {/* 제외사유 */}
-                  <td className="border border-gray-300 px-1 py-0.5 text-center text-xs">{t.exclusion_reason || ''}</td>
+                  <td className="border border-gray-300 px-1 py-1.5 text-center align-middle text-sm text-xs">{t.exclusion_reason || ''}</td>
                   {/* 희망구분 */}
-                  <td className="border border-gray-300 px-1 py-0.5 text-center">{t.preference_round}</td>
+                  <td className="border border-gray-300 px-1 py-1.5 text-center align-middle text-sm">{t.preference_round}</td>
                   {/* 희망학교 */}
-                  <td className="border border-gray-300 px-1 py-0.5 text-center">{getWishSchool(t)?.replace('초등학교', '')}</td>
+                  <td className="border border-gray-300 px-1 py-1.5 text-center align-middle text-sm">{getWishSchool(t)?.replace('초등학교', '')}</td>
                   {/* 배정학교 - 만기자는 노란 배경, 새 배치는 하이라이트 */}
-                  <td className={`border border-gray-300 px-1 py-0.5 text-center font-medium transition-all duration-500 ${
+                  <td className={`border border-gray-300 px-1 py-1.5 text-center align-middle text-sm font-medium transition-all duration-500 ${
                     highlightedIds.has(t.id)
                       ? 'bg-blue-500 text-white scale-105 shadow-lg'
                       : t.is_expired && !t.exclusion_reason && !t.assigned_school_id
@@ -1106,58 +1107,58 @@ export default function Internal() {
                     {t.assigned_school_name?.replace('초등학교', '') || ''}
                   </td>
                   {/* 현임교 - 만기자는 노란 배경 */}
-                  <td className={`border border-gray-300 px-1 py-0.5 text-center ${t.is_expired && !t.exclusion_reason && !t.assigned_school_id ? 'bg-yellow-300' : ''}`}>{t.current_school_name?.replace('초등학교', '')}</td>
+                  <td className={`border border-gray-300 px-1 py-1.5 text-center align-middle text-sm ${t.is_expired && !t.exclusion_reason && !t.assigned_school_id ? 'bg-yellow-300' : ''}`}>{t.current_school_name?.replace('초등학교', '')}</td>
                   {/* 성명 - 만기자는 노란 배경 */}
-                  <td className={`border border-gray-300 px-1 py-0.5 text-center font-medium ${t.is_expired && !t.exclusion_reason && !t.assigned_school_id ? 'bg-yellow-300' : ''}`}>{t.teacher_name}</td>
+                  <td className={`border border-gray-300 px-1 py-1.5 text-center align-middle text-sm font-medium ${t.is_expired && !t.exclusion_reason && !t.assigned_school_id ? 'bg-yellow-300' : ''}`}>{t.teacher_name}</td>
                   {/* 성별 */}
-                  <td className="border border-gray-300 px-1 py-0.5 text-center">{t.gender}</td>
+                  <td className="border border-gray-300 px-1 py-1.5 text-center align-middle text-sm">{t.gender}</td>
                   {/* 생년월일 */}
-                  <td className="border border-gray-300 px-1 py-0.5 text-center">{t.birth_date?.replace(/-/g, '.')}</td>
+                  <td className="border border-gray-300 px-1 py-1.5 text-center align-middle text-sm">{t.birth_date?.replace(/-/g, '.')}</td>
                   {/* 만기여부(O) */}
-                  <td className="border border-gray-300 px-1 py-0.5 text-center">{t.is_expired ? 'O' : ''}</td>
+                  <td className="border border-gray-300 px-1 py-1.5 text-center align-middle text-sm">{t.is_expired ? 'O' : ''}</td>
                   {/* 1희망학교 */}
-                  <td className="border border-gray-300 px-1 py-0.5 text-center">
+                  <td className="border border-gray-300 px-1 py-1.5 text-center align-middle text-sm">
                     {t.remote_wish_1_id && !t.wish_school_1_id ? <span className="text-purple-600 font-medium">통합(벽지)</span> : t.wish_school_1_name?.replace('초등학교', '')}
                   </td>
                   {/* 2희망학교 */}
-                  <td className="border border-gray-300 px-1 py-0.5 text-center">{t.wish_school_2_name?.replace('초등학교', '')}</td>
+                  <td className="border border-gray-300 px-1 py-1.5 text-center align-middle text-sm">{t.wish_school_2_name?.replace('초등학교', '')}</td>
                   {/* 3희망학교 */}
-                  <td className="border border-gray-300 px-1 py-0.5 text-center">{t.wish_school_3_name?.replace('초등학교', '')}</td>
+                  <td className="border border-gray-300 px-1 py-1.5 text-center align-middle text-sm">{t.wish_school_3_name?.replace('초등학교', '')}</td>
                   {/* 비고 */}
-                  <td className="border border-gray-300 px-1 py-0.5 text-center text-xs">{t.note}</td>
+                  <td className="border border-gray-300 px-1 py-1.5 text-center align-middle text-sm text-xs">{t.note}</td>
                   {/* 별도정원 */}
-                  <td className="border border-gray-300 px-1 py-0.5 text-center">{t.separate_quota || ''}</td>
+                  <td className="border border-gray-300 px-1 py-1.5 text-center align-middle text-sm">{t.separate_quota || ''}</td>
                   {/* 우선여부(O) */}
-                  <td className="border border-gray-300 px-1 py-0.5 text-center">{t.is_priority ? 'O' : ''}</td>
+                  <td className="border border-gray-300 px-1 py-1.5 text-center align-middle text-sm">{t.is_priority ? 'O' : ''}</td>
                   {/* 총점 */}
-                  <td className="border border-gray-300 px-1 py-0.5 text-center">{Number.isInteger(t.total_score) ? t.total_score : t.total_score?.toFixed(2)}</td>
+                  <td className="border border-gray-300 px-1 py-1.5 text-center align-middle text-sm">{Number.isInteger(t.total_score) ? t.total_score : t.total_score?.toFixed(2)}</td>
                   {/* 동점자 서열: 2_현임교근무년수, 2_경력점, 1_생년월일 */}
-                  <td className="border border-gray-300 px-1 py-0.5 text-center bg-blue-50">{t.tiebreaker_1 ? (Number.isInteger(t.tiebreaker_1) ? t.tiebreaker_1 : t.tiebreaker_1.toFixed(2)) : ''}</td>
-                  <td className="border border-gray-300 px-1 py-0.5 text-center bg-blue-50">{t.tiebreaker_2 ? (Number.isInteger(t.tiebreaker_2) ? t.tiebreaker_2 : t.tiebreaker_2.toFixed(2)) : ''}</td>
-                  <td className="border border-gray-300 px-1 py-0.5 text-center bg-blue-50">{t.birth_date?.replace(/-/g, '.') || ''}</td>
+                  <td className="border border-gray-300 px-1 py-1.5 text-center align-middle text-sm bg-blue-50">{t.tiebreaker_1 ? (Number.isInteger(t.tiebreaker_1) ? t.tiebreaker_1 : t.tiebreaker_1.toFixed(2)) : ''}</td>
+                  <td className="border border-gray-300 px-1 py-1.5 text-center align-middle text-sm bg-blue-50">{t.tiebreaker_2 ? (Number.isInteger(t.tiebreaker_2) ? t.tiebreaker_2 : t.tiebreaker_2.toFixed(2)) : ''}</td>
+                  <td className="border border-gray-300 px-1 py-1.5 text-center align-middle text-sm bg-blue-50">{t.birth_date?.replace(/-/g, '.') || ''}</td>
                   {/* 통합(벽지) 1희망~8희망 */}
                   {useRemoteSchools && (
                     <>
-                      <td className="border border-gray-300 px-1 py-0.5 text-center bg-purple-50">{t.remote_wish_1_name || ''}</td>
-                      <td className="border border-gray-300 px-1 py-0.5 text-center bg-purple-50">{t.remote_wish_2_name || ''}</td>
-                      <td className="border border-gray-300 px-1 py-0.5 text-center bg-purple-50">{t.remote_wish_3_name || ''}</td>
-                      <td className="border border-gray-300 px-1 py-0.5 text-center bg-purple-50">{t.remote_wish_4_name || ''}</td>
-                      <td className="border border-gray-300 px-1 py-0.5 text-center bg-purple-50">{t.remote_wish_5_name || ''}</td>
-                      <td className="border border-gray-300 px-1 py-0.5 text-center bg-purple-50">{t.remote_wish_6_name || ''}</td>
-                      <td className="border border-gray-300 px-1 py-0.5 text-center bg-purple-50">{t.remote_wish_7_name || ''}</td>
-                      <td className="border border-gray-300 px-1 py-0.5 text-center bg-purple-50">{t.remote_wish_8_name || ''}</td>
+                      <td className="border border-gray-300 px-1 py-1.5 text-center align-middle text-sm bg-purple-50">{t.remote_wish_1_name || ''}</td>
+                      <td className="border border-gray-300 px-1 py-1.5 text-center align-middle text-sm bg-purple-50">{t.remote_wish_2_name || ''}</td>
+                      <td className="border border-gray-300 px-1 py-1.5 text-center align-middle text-sm bg-purple-50">{t.remote_wish_3_name || ''}</td>
+                      <td className="border border-gray-300 px-1 py-1.5 text-center align-middle text-sm bg-purple-50">{t.remote_wish_4_name || ''}</td>
+                      <td className="border border-gray-300 px-1 py-1.5 text-center align-middle text-sm bg-purple-50">{t.remote_wish_5_name || ''}</td>
+                      <td className="border border-gray-300 px-1 py-1.5 text-center align-middle text-sm bg-purple-50">{t.remote_wish_6_name || ''}</td>
+                      <td className="border border-gray-300 px-1 py-1.5 text-center align-middle text-sm bg-purple-50">{t.remote_wish_7_name || ''}</td>
+                      <td className="border border-gray-300 px-1 py-1.5 text-center align-middle text-sm bg-purple-50">{t.remote_wish_8_name || ''}</td>
                     </>
                   )}
                   {/* 특별 가산점 반영 총점 - 원본 총점에 이미 반영되어 있으므로 총점 그대로 표시 */}
-                  <td className="border border-gray-300 px-1 py-0.5 text-center bg-yellow-50">
+                  <td className="border border-gray-300 px-1 py-1.5 text-center align-middle text-sm bg-yellow-50">
                     {Number.isInteger(t.total_score) ? t.total_score : t.total_score?.toFixed(2)}
                   </td>
                   {/* 특별 가산점 - 1희망이 중부인 경우만 표시 */}
-                  <td className="border border-gray-300 px-1 py-0.5 text-center bg-yellow-50">
+                  <td className="border border-gray-300 px-1 py-1.5 text-center align-middle text-sm bg-yellow-50">
                     {t.wish_school_1_name?.includes('중부') ? (t.special_bonus || '') : ''}
                   </td>
                   {/* 관리 */}
-                  <td className="border border-gray-300 px-1 py-0.5 text-center">
+                  <td className="border border-gray-300 px-1 py-1.5 text-center align-middle text-sm">
                     <button
                       onClick={() => handleEdit(t)}
                       className="text-blue-600 hover:text-blue-800 text-xs"
