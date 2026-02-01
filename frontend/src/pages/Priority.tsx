@@ -1,6 +1,8 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { priorityApi, schoolApi, surplusApi } from '../services/api';
 import type { PriorityTransfer, SurplusTransfer, School } from '../types';
+import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 
 // 탭 타입
 type TabType = 'priority' | 'surplus';
@@ -68,6 +70,10 @@ export default function Priority() {
   const [surplusEditForm, setSurplusEditForm] = useState<Partial<SurplusTransfer>>({});
   const [showSurplusBulkForm, setShowSurplusBulkForm] = useState(false);
   const [surplusBulkRows, setSurplusBulkRows] = useState<SurplusBulkRow[]>([emptySurplusRow(), emptySurplusRow(), emptySurplusRow(), emptySurplusRow(), emptySurplusRow()]);
+
+  // 파일 업로드 ref
+  const priorityFileRef = useRef<HTMLInputElement>(null);
+  const surplusFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadData();
@@ -287,6 +293,268 @@ export default function Priority() {
     }
   };
 
+  // 우선/유예 엑셀 다운로드
+  const handlePriorityDownload = async () => {
+    const workbook = new ExcelJS.Workbook();
+    const ws = workbook.addWorksheet('우선유예');
+
+    const yellowFill: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF9C4' } };
+    const thinBorder: Partial<ExcelJS.Borders> = {
+      top: { style: 'thin' }, bottom: { style: 'thin' },
+      left: { style: 'thin' }, right: { style: 'thin' }
+    };
+
+    // 헤더
+    const headers = ['순', '구분', '현임교', '성명', '성별', '생년월일', '총점', '비고'];
+    const headerRow = ws.getRow(1);
+    headers.forEach((h, idx) => {
+      const cell = headerRow.getCell(idx + 1);
+      cell.value = h;
+      cell.fill = yellowFill;
+      cell.border = thinBorder;
+      cell.font = { bold: true, size: 11 };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    });
+
+    // 데이터
+    sortedData.forEach((item, index) => {
+      const row = ws.getRow(index + 2);
+      const values = [
+        index + 1,
+        item.type_code || '',
+        item.school_name || '',
+        item.teacher_name || '',
+        item.gender || '',
+        item.birth_date || '',
+        item.total_score ?? '',
+        item.note || '',
+      ];
+      values.forEach((v, idx) => {
+        const cell = row.getCell(idx + 1);
+        cell.value = v;
+        cell.border = thinBorder;
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      });
+    });
+
+    ws.columns.forEach((col) => { col.width = 12; });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `우선유예_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // 우선/유예 엑셀 업로드
+  const handlePriorityUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1 });
+
+      // 기존 데이터 삭제
+      if (!confirm(`기존 우선/유예 데이터 ${priorities.length}건을 삭제하고 새로 업로드하시겠습니까?`)) {
+        e.target.value = '';
+        return;
+      }
+
+      for (const p of priorities) {
+        await priorityApi.delete(p.id);
+      }
+
+      let successCount = 0;
+      let failCount = 0;
+
+      // 헤더 다음 행부터 처리
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || !row[2] || !row[3]) continue; // 현임교, 성명 필수
+
+        const 구분 = String(row[1] || '우선').trim();
+        const 현임교 = String(row[2] || '').trim();
+        const 성명 = String(row[3] || '').trim();
+        const 성별 = String(row[4] || '').trim();
+        const 생년월일 = String(row[5] || '').trim();
+        const 총점 = row[6] ? parseFloat(String(row[6])) : undefined;
+        const 비고 = String(row[7] || '').trim();
+
+        // 학교명으로 학교 ID 찾기
+        const school = schools.find(s =>
+          s.name === 현임교 ||
+          s.name.replace('초등학교', '') === 현임교 ||
+          s.name.replace('초등학교', '').replace('초', '') === 현임교
+        );
+
+        if (!school) {
+          failCount++;
+          continue;
+        }
+
+        try {
+          await priorityApi.create({
+            type_code: 구분 === '전보유예' ? '전보유예' : '우선',
+            school_id: school.id,
+            teacher_name: 성명,
+            gender: 성별 || undefined,
+            birth_date: 생년월일 || undefined,
+            total_score: 총점,
+            note: 비고 || undefined,
+          });
+          successCount++;
+        } catch {
+          failCount++;
+        }
+      }
+
+      alert(`업로드 완료: ${successCount}건 성공, ${failCount}건 실패`);
+      loadData();
+    } catch (error) {
+      console.error('업로드 실패:', error);
+      alert('엑셀 파일 처리 중 오류가 발생했습니다.');
+    }
+
+    e.target.value = '';
+  };
+
+  // 과원 엑셀 다운로드
+  const handleSurplusDownload = async () => {
+    const workbook = new ExcelJS.Workbook();
+    const ws = workbook.addWorksheet('과원');
+
+    const yellowFill: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF9C4' } };
+    const thinBorder: Partial<ExcelJS.Borders> = {
+      top: { style: 'thin' }, bottom: { style: 'thin' },
+      left: { style: 'thin' }, right: { style: 'thin' }
+    };
+
+    // 헤더
+    const headers = ['순', '현임교', '성명', '과원순번', '현학교남기', '성별', '생년월일', '비고'];
+    const headerRow = ws.getRow(1);
+    headers.forEach((h, idx) => {
+      const cell = headerRow.getCell(idx + 1);
+      cell.value = h;
+      cell.fill = yellowFill;
+      cell.border = thinBorder;
+      cell.font = { bold: true, size: 11 };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    });
+
+    // 데이터
+    sortedSurpluses.forEach((item, index) => {
+      const row = ws.getRow(index + 2);
+      const values = [
+        index + 1,
+        item.school_name || '',
+        item.teacher_name || '',
+        item.surplus_number ?? '',
+        item.stay_current ? 'O' : '',
+        item.gender || '',
+        item.birth_date || '',
+        item.note || '',
+      ];
+      values.forEach((v, idx) => {
+        const cell = row.getCell(idx + 1);
+        cell.value = v;
+        cell.border = thinBorder;
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      });
+    });
+
+    ws.columns.forEach((col) => { col.width = 12; });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `과원_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // 과원 엑셀 업로드
+  const handleSurplusUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1 });
+
+      // 기존 데이터 삭제
+      if (!confirm(`기존 과원 데이터 ${surpluses.length}건을 삭제하고 새로 업로드하시겠습니까?`)) {
+        e.target.value = '';
+        return;
+      }
+
+      for (const s of surpluses) {
+        await surplusApi.delete(s.id);
+      }
+
+      let successCount = 0;
+      let failCount = 0;
+
+      // 헤더 다음 행부터 처리
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || !row[1] || !row[2] || !row[3]) continue; // 현임교, 성명, 과원순번 필수
+
+        const 현임교 = String(row[1] || '').trim();
+        const 성명 = String(row[2] || '').trim();
+        const 과원순번 = parseInt(String(row[3] || '0'));
+        const 현학교남기 = String(row[4] || '').trim().toUpperCase() === 'O';
+        const 성별 = String(row[5] || '').trim();
+        const 생년월일 = String(row[6] || '').trim();
+        const 비고 = String(row[7] || '').trim();
+
+        // 학교명으로 학교 ID 찾기
+        const school = schools.find(s =>
+          s.name === 현임교 ||
+          s.name.replace('초등학교', '') === 현임교 ||
+          s.name.replace('초등학교', '').replace('초', '') === 현임교
+        );
+
+        if (!school || !과원순번) {
+          failCount++;
+          continue;
+        }
+
+        try {
+          await surplusApi.create({
+            school_id: school.id,
+            teacher_name: 성명,
+            surplus_number: 과원순번,
+            stay_current: 현학교남기,
+            gender: 성별 || undefined,
+            birth_date: 생년월일 || undefined,
+            note: 비고 || undefined,
+          });
+          successCount++;
+        } catch {
+          failCount++;
+        }
+      }
+
+      alert(`업로드 완료: ${successCount}건 성공, ${failCount}건 실패`);
+      loadData();
+    } catch (error) {
+      console.error('업로드 실패:', error);
+      alert('엑셀 파일 처리 중 오류가 발생했습니다.');
+    }
+
+    e.target.value = '';
+  };
+
   if (loading) {
     return (
       <div className="p-8 flex items-center justify-center">
@@ -359,7 +627,28 @@ export default function Priority() {
             전보유예 ({deferCount})
           </span>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          {/* 엑셀 다운로드/업로드 */}
+          <input
+            type="file"
+            ref={priorityFileRef}
+            onChange={handlePriorityUpload}
+            accept=".xlsx,.xls"
+            className="hidden"
+          />
+          <button
+            onClick={handlePriorityDownload}
+            className="px-3 py-1.5 rounded text-sm bg-green-600 text-white hover:bg-green-700"
+          >
+            📥 다운로드
+          </button>
+          <button
+            onClick={() => priorityFileRef.current?.click()}
+            className="px-3 py-1.5 rounded text-sm bg-blue-600 text-white hover:bg-blue-700"
+          >
+            📤 업로드
+          </button>
+          <div className="w-px h-6 bg-gray-300 mx-1"></div>
           <button
             onClick={() => setSortType('order')}
             className={`px-3 py-1.5 rounded text-sm ${sortType === 'order' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
@@ -580,6 +869,28 @@ export default function Priority() {
               <span className="px-4 py-2 bg-yellow-500 text-white rounded-lg font-medium">
                 현학교 남기 ({stayCount})
               </span>
+            </div>
+            <div className="flex gap-2">
+              {/* 엑셀 다운로드/업로드 */}
+              <input
+                type="file"
+                ref={surplusFileRef}
+                onChange={handleSurplusUpload}
+                accept=".xlsx,.xls"
+                className="hidden"
+              />
+              <button
+                onClick={handleSurplusDownload}
+                className="px-3 py-1.5 rounded text-sm bg-green-600 text-white hover:bg-green-700"
+              >
+                📥 다운로드
+              </button>
+              <button
+                onClick={() => surplusFileRef.current?.click()}
+                className="px-3 py-1.5 rounded text-sm bg-blue-600 text-white hover:bg-blue-700"
+              >
+                📤 업로드
+              </button>
             </div>
           </div>
 
