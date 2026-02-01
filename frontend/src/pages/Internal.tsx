@@ -713,7 +713,7 @@ export default function Internal() {
 
     // 열 너비 통일
     ws.columns.forEach((col) => {
-      col.width = 10;
+      col.width = 12;
     });
 
     // 파일 다운로드
@@ -876,7 +876,7 @@ export default function Internal() {
                   <tr className="bg-yellow-50">
                     <td className="border border-yellow-300 px-1 py-0.5 font-medium text-center whitespace-nowrap bg-yellow-200">학교명</td>
                     {group.map(s => (
-                      <td key={s.id} className="border border-yellow-300 px-1 py-1.5 text-center align-middle text-sm whitespace-nowrap text-xs">
+                      <td key={s.id} className="border border-yellow-300 px-1 py-1.5 text-center align-middle text-sm whitespace-nowrap">
                         {s.name.replace('초등학교', '').replace('초', '')}
                       </td>
                     ))}
@@ -1020,7 +1020,7 @@ export default function Internal() {
               disabled={processing || transfers.length === 0}
               className="px-2 py-1 text-xs bg-green-600 text-white border border-green-600 hover:bg-green-700 disabled:opacity-50"
             >
-              📥 엑셀 다운로드
+              📥 배치결과
             </button>
           </div>
         </div>

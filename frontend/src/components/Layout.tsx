@@ -6,7 +6,7 @@ const menuItems = [
   { path: '/data-entry', label: '자료입력', icon: '📝' },
   { path: '/schools', label: '학교관리', icon: '🏫' },
   { path: '/vacancies', label: '결원/충원/관외전출', icon: '📋' },
-  { path: '/priority', label: '우선/유예', icon: '⭐' },
+  { path: '/priority', label: '우선/유예/과원', icon: '⭐' },
   { path: '/internal', label: '관내전출입', icon: '🔄' },
   { path: '/external-in', label: '관외전입', icon: '📥' },
   { path: '/documents', label: '문서출력', icon: '🖨️' },
