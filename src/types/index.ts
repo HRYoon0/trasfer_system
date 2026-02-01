@@ -149,3 +149,16 @@ export interface PriorityTransfer {
   birth_date: string | null;
   note: string | null;
 }
+
+// 과원
+export interface SurplusTransfer {
+  id: number;
+  school_id: number | null;
+  school_name?: string;     // 조인 필드
+  teacher_name: string;
+  surplus_number: number | null;  // 과원 순번 (1, 2, 3...)
+  stay_current: boolean;          // 현재 학교에 남기 여부
+  gender: string | null;
+  birth_date: string | null;
+  note: string | null;
+}

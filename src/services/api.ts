@@ -9,6 +9,7 @@ import type {
   AssignmentStats,
   AssignmentResult,
   PriorityTransfer,
+  SurplusTransfer,
 } from '../types';
 
 // 학교 API
@@ -226,6 +227,40 @@ export const priorityApi = {
   },
   delete: async (id: number) => {
     const { error } = await supabase.from('priority_transfers').delete().eq('id', id);
+    if (error) throw error;
+    return { data: null };
+  },
+};
+
+// 과원 API
+export const surplusApi = {
+  getAll: async () => {
+    const { data, error } = await supabase
+      .from('surplus_transfers')
+      .select(`
+        *,
+        schools:school_id (name)
+      `)
+      .order('id');
+    if (error) throw error;
+    const transformed = (data || []).map((item: any) => ({
+      ...item,
+      school_name: item.schools?.name || null,
+    }));
+    return { data: transformed as SurplusTransfer[] };
+  },
+  create: async (surplus: { school_id: number; teacher_name: string; surplus_number: number; stay_current: boolean; gender?: string; birth_date?: string; note?: string }) => {
+    const { data, error } = await supabase.from('surplus_transfers').insert(surplus).select().single();
+    if (error) throw error;
+    return { data };
+  },
+  update: async (id: number, surplus: Partial<SurplusTransfer>) => {
+    const { data, error } = await supabase.from('surplus_transfers').update(surplus).eq('id', id).select().single();
+    if (error) throw error;
+    return { data };
+  },
+  delete: async (id: number) => {
+    const { error } = await supabase.from('surplus_transfers').delete().eq('id', id);
     if (error) throw error;
     return { data: null };
   },
@@ -671,6 +706,218 @@ export const assignmentApi = {
     }
 
     return { data: { checked: checkedCount } };
+  },
+
+  // 과원해소 점검
+  checkSurplus: async () => {
+    const { data: surpluses } = await surplusApi.getAll();
+    const { data: schools } = await schoolApi.getAll();
+    const { data: initialInternal } = await internalApi.getAll();
+    const schoolNameMap = new Map(schools.map(s => [s.id, s.name]));
+
+    console.log('=== 과원해소 점검 시작 ===');
+    console.log('전체 과원:', surpluses.map(s => `${s.teacher_name}(${s.school_name}, 과원${s.surplus_number}, 남기:${s.stay_current})`));
+
+    // 이미 제외사유가 있는 과원 교사는 제외
+    const validSurpluses = surpluses.filter(s => {
+      const teacher = initialInternal.find(
+        t => t.current_school_id === s.school_id && t.teacher_name === s.teacher_name
+      );
+      if (teacher && teacher.exclusion_reason) {
+        console.log(`  제외: ${s.teacher_name}(${s.school_name}) - 이미 제외사유 있음: ${teacher.exclusion_reason}`);
+        return false;
+      }
+      return true;
+    });
+
+    // 1단계: 현학교 남기 과원
+    const stayingSurpluses = validSurpluses.filter(s => s.stay_current);
+    // 2단계: 전보희망 과원 (남기 안 함)
+    const transferSurpluses = validSurpluses.filter(s => !s.stay_current);
+
+    console.log('1단계 대상 (현학교 남기):', stayingSurpluses.map(s => `${s.teacher_name}(${s.school_name})`));
+    console.log('2단계 대상 (전보희망):', transferSurpluses.map(s => `${s.teacher_name}(${s.school_name})`));
+
+    // 학교별 그룹화 함수 (surplus_number 내림차순)
+    const groupBySchool = (list: typeof surpluses) => {
+      const map = new Map<number, typeof list>();
+      for (const s of list) {
+        if (!s.school_id) continue;
+        const arr = map.get(s.school_id) || [];
+        arr.push(s);
+        map.set(s.school_id, arr);
+      }
+      for (const [, arr] of map) {
+        arr.sort((a, b) => (b.surplus_number ?? 0) - (a.surplus_number ?? 0));
+      }
+      return map;
+    };
+
+    let totalChecked = 0;
+
+    // === 1단계: 현학교 남기 과원 해소 ===
+    console.log('\n========== 1단계: 현학교 남기 과원 해소 ==========');
+    const stayBySchool = groupBySchool(stayingSurpluses);
+
+    for (let iter = 0; iter < 100; iter++) {
+      console.log(`\n--- 1단계 반복 ${iter + 1} ---`);
+      await assignmentApi.auto();
+
+      const { data: internalData } = await internalApi.getAll();
+      const shortages = await calculateSchoolShortage();
+      const shortageMap = new Map(shortages.map(s => [s.id, s.shortage]));
+
+      let foundAny = false;
+
+      for (const [schoolId, surplusList] of stayBySchool) {
+        if (surplusList.length === 0) continue;
+
+        const schoolName = schoolNameMap.get(schoolId) || `학교${schoolId}`;
+        const shortage = shortageMap.get(schoolId) ?? 0;
+
+        // 외부 배치 수 (이 학교로 배치된 교사)
+        const externalCount = internalData.filter(t =>
+          t.assigned_school_id === schoolId &&
+          t.current_school_id !== schoolId
+        ).length;
+
+        console.log(`${schoolName}(${schoolId}): 과부족=${shortage}, 외부배치=${externalCount}명, 남은과원=${surplusList.length}명`);
+        console.log('  과원 목록:', surplusList.map(s => `${s.teacher_name}(과원${s.surplus_number})`));
+
+        // 외부배치가 있으면 그 수만큼, 없으면 과부족이 음수일 때 그만큼
+        let availableSlots = 0;
+        if (externalCount > 0) {
+          availableSlots = externalCount;
+          console.log(`  → 외부배치 ${externalCount}명 있음 → ${externalCount}명 해소 가능`);
+        } else if (shortage < 0) {
+          availableSlots = Math.abs(shortage);
+          console.log(`  → 외부배치 없음, 과부족 ${shortage} → ${availableSlots}명 해소 가능`);
+        } else {
+          console.log('  → 자리 없음 (외부배치 0, 과부족 >= 0)');
+          continue;
+        }
+
+        const resolveCount = Math.min(availableSlots, surplusList.length);
+
+        for (let i = 0; i < resolveCount; i++) {
+          const topSurplus = surplusList[0];
+          if (!topSurplus) break;
+
+          const matchedTeacher = internalData.find(
+            t => t.current_school_id === schoolId &&
+                 t.teacher_name === topSurplus.teacher_name &&
+                 !t.exclusion_reason
+          );
+
+          if (matchedTeacher) {
+            console.log(`  ✓ ${matchedTeacher.teacher_name} → 과원해소`);
+            await internalApi.update(matchedTeacher.id, { exclusion_reason: '과원해소' });
+            totalChecked++;
+            foundAny = true;
+            surplusList.shift();
+          } else {
+            console.log(`  ✗ ${topSurplus.teacher_name} 매칭 실패`);
+            surplusList.shift();
+            i--;
+          }
+        }
+      }
+
+      if (!foundAny) {
+        console.log('1단계 완료: 더 이상 해소 대상 없음');
+        break;
+      }
+    }
+
+    // === 2단계: 전보희망 과원 중 미배치자 해소 ===
+    console.log('\n========== 2단계: 전보희망 과원 중 미배치자 해소 ==========');
+    const transferBySchool = groupBySchool(transferSurpluses);
+
+    for (let iter = 0; iter < 100; iter++) {
+      console.log(`\n--- 2단계 반복 ${iter + 1} ---`);
+      await assignmentApi.auto();
+
+      const { data: internalData } = await internalApi.getAll();
+      const shortages = await calculateSchoolShortage();
+      const shortageMap = new Map(shortages.map(s => [s.id, s.shortage]));
+
+      let foundAny = false;
+
+      for (const [schoolId, surplusList] of transferBySchool) {
+        if (surplusList.length === 0) continue;
+
+        const schoolName = schoolNameMap.get(schoolId) || `학교${schoolId}`;
+        const shortage = shortageMap.get(schoolId) ?? 0;
+
+        // 외부 배치 수
+        const externalCount = internalData.filter(t =>
+          t.assigned_school_id === schoolId &&
+          t.current_school_id !== schoolId
+        ).length;
+
+        console.log(`${schoolName}(${schoolId}): 과부족=${shortage}, 외부배치=${externalCount}명, 남은과원=${surplusList.length}명`);
+
+        // 외부배치가 있으면 그 수만큼, 없으면 과부족이 음수일 때 그만큼
+        let availableSlots = 0;
+        if (externalCount > 0) {
+          availableSlots = externalCount;
+          console.log(`  → 외부배치 ${externalCount}명 있음 → ${externalCount}명 해소 가능`);
+        } else if (shortage < 0) {
+          availableSlots = Math.abs(shortage);
+          console.log(`  → 외부배치 없음, 과부족 ${shortage} → ${availableSlots}명 해소 가능`);
+        } else {
+          console.log('  → 자리 없음');
+          continue;
+        }
+
+        let resolved = 0;
+
+        for (let i = 0; i < surplusList.length && resolved < availableSlots; i++) {
+          const surplus = surplusList[i];
+
+          const matchedTeacher = internalData.find(
+            t => t.current_school_id === schoolId &&
+                 t.teacher_name === surplus.teacher_name &&
+                 !t.exclusion_reason
+          );
+
+          if (matchedTeacher) {
+            // 희망학교에 배치 안 됐으면 과원해소 대상
+            if (!matchedTeacher.assigned_school_id) {
+              console.log(`  ✓ ${matchedTeacher.teacher_name} (미배치) → 과원해소`);
+              await internalApi.update(matchedTeacher.id, { exclusion_reason: '과원해소' });
+              totalChecked++;
+              foundAny = true;
+              resolved++;
+              surplusList.splice(i, 1);
+              i--;
+            } else {
+              console.log(`  - ${matchedTeacher.teacher_name}: 이미 ${matchedTeacher.assigned_school_name}에 배치됨`);
+            }
+          }
+        }
+      }
+
+      if (!foundAny) {
+        console.log('2단계 완료: 더 이상 해소 대상 없음');
+        break;
+      }
+    }
+
+    // 초기화
+    await assignmentApi.reset();
+    await assignmentApi.resetPreferenceRound();
+
+    console.log(`\n=== 과원해소 점검 완료: 총 ${totalChecked}명 ===`);
+
+    return {
+      data: {
+        checked: totalChecked,
+        message: totalChecked > 0
+          ? `${totalChecked}명 과원해소 처리 완료`
+          : '과원해소 대상이 없습니다.'
+      }
+    };
   },
 
   getUnassigned: async () => {
