@@ -526,6 +526,23 @@ export default function Internal() {
     }
   };
 
+  // 과원해소 점검
+  const handleCheckSurplus = async () => {
+    if (!confirm('과원해소를 점검하시겠습니까?\n\n- 과원 탭에서 "현학교 남기"가 체크된 교사 대상\n- 1~3희망 시뮬레이션으로 자리 생기면 과원해소 처리\n- 과원순번이 높은(숫자가 큰) 사람부터 해소')) return;
+    setProcessing(true);
+    try {
+      const res = await assignmentApi.checkSurplus();
+      const result = res.data as { checked: number; message: string };
+      alert(`과원해소 점검 완료!\n\n${result.message}`);
+      loadData();
+    } catch (error) {
+      console.error('과원해소 점검 실패:', error);
+      alert('과원해소 점검 중 오류가 발생했습니다.');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
   // 배치 실행 (자동 전체 배치)
   const handleAutoAssign = async () => {
     if (!confirm('자동 배치를 실행하시겠습니까?\n1희망 → 2희망 → 3희망 순서로 배치됩니다.')) return;
@@ -545,6 +562,66 @@ export default function Internal() {
     } finally {
       setProcessing(false);
     }
+  };
+
+  // 배치 결과 엑셀 다운로드
+  const handleDownloadExcel = () => {
+    if (transfers.length === 0) {
+      alert('다운로드할 데이터가 없습니다.');
+      return;
+    }
+
+    // 현재 정렬된 데이터 사용
+    const data = sortedTransfers.map((t, index) => {
+      const row: Record<string, any> = {
+        '순': index + 1,
+        '제외사유': t.exclusion_reason || '',
+        '희망구분': t.preference_round || '',
+        '희망학교': getWishSchool(t)?.replace('초등학교', '') || '',
+        '배정학교': t.assigned_school_name?.replace('초등학교', '') || '',
+        '현임교': t.current_school_name?.replace('초등학교', '') || '',
+        '성명': t.teacher_name || '',
+        '성별': t.gender || '',
+        '생년월일': t.birth_date || '',
+        '만기여부': t.is_expired ? 'O' : '',
+        '1희망학교': t.wish_school_1_name?.replace('초등학교', '') || '',
+        '2희망학교': t.wish_school_2_name?.replace('초등학교', '') || '',
+        '3희망학교': t.wish_school_3_name?.replace('초등학교', '') || '',
+        '비고': t.note || '',
+        '별도정원': t.separate_quota || '',
+        '우선여부': t.is_priority ? 'O' : '',
+        '총점': t.total_score || 0,
+        '2_현임교근무년수': t.tiebreaker_1 || 0,
+        '2_경력점': t.tiebreaker_2 || 0,
+        '1_생년월일': t.tiebreaker_3 || 0,
+      };
+
+      // 통합(벽지) 희망 추가
+      if (useRemoteSchools) {
+        row['통합1희망'] = t.remote_wish_1_name?.replace('초등학교', '') || '';
+        row['통합2희망'] = t.remote_wish_2_name?.replace('초등학교', '') || '';
+        row['통합3희망'] = t.remote_wish_3_name?.replace('초등학교', '') || '';
+        row['통합4희망'] = t.remote_wish_4_name?.replace('초등학교', '') || '';
+        row['통합5희망'] = t.remote_wish_5_name?.replace('초등학교', '') || '';
+        row['통합6희망'] = t.remote_wish_6_name?.replace('초등학교', '') || '';
+        row['통합7희망'] = t.remote_wish_7_name?.replace('초등학교', '') || '';
+        row['통합8희망'] = t.remote_wish_8_name?.replace('초등학교', '') || '';
+      }
+
+      row['특별가산점반영총점'] = (t.total_score || 0) + (t.special_bonus || 0);
+      row['특별가산점'] = t.special_bonus || 0;
+
+      return row;
+    });
+
+    // 워크시트 생성
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '관내전출입');
+
+    // 파일명에 날짜 추가
+    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    XLSX.writeFile(wb, `관내전출입_배치결과_${today}.xlsx`);
   };
 
   const _handleReset = async () => {
@@ -791,27 +868,36 @@ export default function Internal() {
               2. 우선전보, 전보유예 점검
             </button>
 
+            {/* 과원해소 점검 버튼 */}
+            <button
+              onClick={handleCheckSurplus}
+              disabled={processing}
+              className="px-2 py-1 text-xs bg-yellow-100 border border-yellow-400 hover:bg-yellow-200 disabled:opacity-50"
+            >
+              3. 과원해소 점검
+            </button>
+
             {/* 희망별 배치 버튼 */}
             <button
               onClick={handle1stRoundAssign}
               disabled={processing}
               className="px-2 py-1 text-xs bg-white border hover:bg-gray-100 disabled:opacity-50"
             >
-              3. 1희망 배치
+              4. 1희망 배치
             </button>
             <button
               onClick={handle2ndRoundAssign}
               disabled={processing}
               className="px-2 py-1 text-xs bg-white border hover:bg-gray-100 disabled:opacity-50"
             >
-              4. 2희망 배치
+              5. 2희망 배치
             </button>
             <button
               onClick={handle3rdRoundAssign}
               disabled={processing}
               className="px-2 py-1 text-xs bg-white border hover:bg-gray-100 disabled:opacity-50"
             >
-              5. 3희망 배치
+              6. 3희망 배치
             </button>
             <button
               onClick={handleAutoAssign}
@@ -819,6 +905,18 @@ export default function Internal() {
               className="px-2 py-1 text-xs bg-blue-600 text-white border border-blue-600 hover:bg-blue-700 disabled:opacity-50"
             >
               자동 배치 (1→2→3)
+            </button>
+
+            {/* 구분선 */}
+            <div className="w-px h-6 bg-gray-300 mx-1"></div>
+
+            {/* 엑셀 다운로드 버튼 */}
+            <button
+              onClick={handleDownloadExcel}
+              disabled={processing || transfers.length === 0}
+              className="px-2 py-1 text-xs bg-green-600 text-white border border-green-600 hover:bg-green-700 disabled:opacity-50"
+            >
+              📥 엑셀 다운로드
             </button>
           </div>
         </div>
