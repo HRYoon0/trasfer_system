@@ -709,12 +709,10 @@ export default function Internal() {
       currentRow++;
     });
 
-    // 열 너비 자동 조정 (생년월일 열은 넓게)
+    // 열 너비 통일 (생년월일 표시에 맞춤)
     ws.columns.forEach((col, idx) => {
-      if (idx === 0) col.width = 5;        // 순
-      else if (idx === 6) col.width = 10;  // 성명
-      else if (idx === 8) col.width = 12;  // 생년월일
-      else col.width = 8;
+      if (idx === 0) col.width = 4;        // 순
+      else col.width = 10;                  // 나머지 모두 동일
     });
 
     // 파일 다운로드
