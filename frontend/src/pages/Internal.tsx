@@ -1110,10 +1110,10 @@ export default function Internal() {
               자동 배치 (1→2→3)
             </button>
 
-            {/* 구분선 */}
-            <div className="w-px h-6 bg-gray-300 mx-1"></div>
+          </div>
 
-            {/* 엑셀 다운로드 버튼 */}
+          {/* 엑셀 다운로드 버튼 (별도 줄) */}
+          <div className="flex items-center gap-2">
             <button
               onClick={handleDownloadExcel}
               disabled={processing || transfers.length === 0}
