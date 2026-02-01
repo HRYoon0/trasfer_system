@@ -6,6 +6,8 @@ export interface School {
   display_order: number;
   quota: number;
   current_count: number;
+  male_count?: number;  // DB에 컬럼 추가 전까지 optional
+  female_count?: number; // DB에 컬럼 추가 전까지 optional
 }
 
 // 결원/충원
@@ -17,6 +19,8 @@ export interface VacancyItem {
   school_id: number | null;
   school_name: string | null;
   teacher_name: string;
+  gender: string | null;
+  birth_date: string | null;
   note: string | null;
 }
 
@@ -29,6 +33,7 @@ export interface ExternalOut {
   school_name: string | null;
   teacher_name: string;
   gender: string | null;
+  birth_date: string | null;
   destination: string | null;
   separate_quota: string | null;
   note: string | null;
@@ -42,6 +47,7 @@ export interface ExternalIn {
   origin_school: string | null;
   teacher_name: string;
   gender: string | null;
+  birth_date: string | null;
   assigned_school_id: number | null;
   assigned_school_name: string | null;
   separate_quota: string | null;
@@ -80,6 +86,24 @@ export interface InternalTransfer {
   tiebreaker_5: number;
   tiebreaker_6: number;
   tiebreaker_7: number;
+  // 통합(벽지) 희망 (학교 ID)
+  remote_wish_1_id: number | null;
+  remote_wish_2_id: number | null;
+  remote_wish_3_id: number | null;
+  remote_wish_4_id: number | null;
+  remote_wish_5_id: number | null;
+  remote_wish_6_id: number | null;
+  remote_wish_7_id: number | null;
+  remote_wish_8_id: number | null;
+  // 통합(벽지) 희망 학교명 (조회용)
+  remote_wish_1_name: string | null;
+  remote_wish_2_name: string | null;
+  remote_wish_3_name: string | null;
+  remote_wish_4_name: string | null;
+  remote_wish_5_name: string | null;
+  remote_wish_6_name: string | null;
+  remote_wish_7_name: string | null;
+  remote_wish_8_name: string | null;
   special_bonus: number;
 }
 
@@ -111,4 +135,17 @@ export interface AssignmentResult {
   };
   total_assigned: number;
   unassigned: number;
+}
+
+// 우선전보/전보유예
+export interface PriorityTransfer {
+  id: number;
+  type_code: string;        // "우선" | "전보유예"
+  school_id: number | null;
+  school_name?: string;     // 조인 필드
+  teacher_name: string;
+  total_score: number | null;
+  gender: string | null;
+  birth_date: string | null;
+  note: string | null;
 }

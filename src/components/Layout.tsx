@@ -2,11 +2,13 @@ import { NavLink, Outlet } from 'react-router-dom';
 
 const menuItems = [
   { path: '/', label: '대시보드', icon: '📊' },
+  { path: '/statistics', label: '통계표', icon: '📈' },
+  { path: '/data-entry', label: '자료입력', icon: '📝' },
   { path: '/schools', label: '학교관리', icon: '🏫' },
-  { path: '/vacancies', label: '결원/충원', icon: '📋' },
-  { path: '/external', label: '관외전출입', icon: '🔄' },
-  { path: '/internal', label: '관내전출입', icon: '⭐' },
-  { path: '/assignment', label: '배치관리', icon: '🎯' },
+  { path: '/vacancies', label: '결원/충원/관외전출', icon: '📋' },
+  { path: '/priority', label: '우선/유예', icon: '⭐' },
+  { path: '/internal', label: '관내전출입', icon: '🔄' },
+  { path: '/external-in', label: '관외전입', icon: '📥' },
   { path: '/documents', label: '문서출력', icon: '🖨️' },
   { path: '/settings', label: '설정', icon: '⚙️' },
 ];
