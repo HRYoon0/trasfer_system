@@ -387,6 +387,76 @@ export default function Priority() {
     URL.revokeObjectURL(url);
   };
 
+  // 입력자료 다운로드 (현재 데이터)
+  const handleDataDownload = async () => {
+    if (priorities.length === 0 && surpluses.length === 0) {
+      alert('다운로드할 데이터가 없습니다.');
+      return;
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    const yellowFill: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF9C4' } };
+    const thinBorder: Partial<ExcelJS.Borders> = {
+      top: { style: 'thin' }, bottom: { style: 'thin' },
+      left: { style: 'thin' }, right: { style: 'thin' }
+    };
+
+    // 시트1: 우선유예
+    const ws1 = workbook.addWorksheet('우선유예');
+    const headers1 = ['순', '구분', '현임교', '성명', '성별', '생년월일', '총점', '비고'];
+    const headerRow1 = ws1.getRow(1);
+    headers1.forEach((h, idx) => {
+      const cell = headerRow1.getCell(idx + 1);
+      cell.value = h;
+      cell.fill = yellowFill;
+      cell.border = thinBorder;
+      cell.font = { bold: true, size: 11 };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    });
+    sortedData.forEach((item, index) => {
+      const row = ws1.getRow(index + 2);
+      [index + 1, item.type_code || '', item.school_name || '', item.teacher_name || '', item.gender || '', item.birth_date || '', item.total_score ?? '', item.note || ''].forEach((v, idx) => {
+        const cell = row.getCell(idx + 1);
+        cell.value = v;
+        cell.border = thinBorder;
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      });
+    });
+    ws1.columns.forEach((col) => { col.width = 12; });
+
+    // 시트2: 과원
+    const ws2 = workbook.addWorksheet('과원');
+    const headers2 = ['순', '현임교', '성명', '과원순번', '현학교남기', '성별', '생년월일', '비고'];
+    const headerRow2 = ws2.getRow(1);
+    headers2.forEach((h, idx) => {
+      const cell = headerRow2.getCell(idx + 1);
+      cell.value = h;
+      cell.fill = yellowFill;
+      cell.border = thinBorder;
+      cell.font = { bold: true, size: 11 };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    });
+    sortedSurpluses.forEach((item, index) => {
+      const row = ws2.getRow(index + 2);
+      [index + 1, item.school_name || '', item.teacher_name || '', item.surplus_number ?? '', item.stay_current ? 'O' : '', item.gender || '', item.birth_date || '', item.note || ''].forEach((v, idx) => {
+        const cell = row.getCell(idx + 1);
+        cell.value = v;
+        cell.border = thinBorder;
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      });
+    });
+    ws2.columns.forEach((col) => { col.width = 12; });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `우선유예과원_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   // 통합 엑셀 업로드 (우선유예 + 과원)
   const handleCombinedUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -505,6 +575,12 @@ export default function Priority() {
             className="px-3 py-1.5 rounded text-sm bg-blue-600 text-white hover:bg-blue-700"
           >
             📤 업로드
+          </button>
+          <button
+            onClick={handleDataDownload}
+            className="px-3 py-1.5 rounded text-sm bg-orange-500 text-white hover:bg-orange-600"
+          >
+            📥 입력자료 다운로드
           </button>
         </div>
         {activeTab === 'priority' ? (
