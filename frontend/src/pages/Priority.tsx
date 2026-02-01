@@ -498,7 +498,7 @@ export default function Priority() {
             onClick={handleCombinedDownload}
             className="px-3 py-1.5 rounded text-sm bg-green-600 text-white hover:bg-green-700"
           >
-            📥 다운로드
+            📥 템플릿 다운로드
           </button>
           <button
             onClick={() => combinedFileRef.current?.click()}
