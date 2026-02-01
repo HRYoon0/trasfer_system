@@ -323,6 +323,21 @@ export default function Priority() {
       });
     });
     ws1.columns.forEach((col) => { col.width = 12; });
+    // 드롭다운 설정 (2행~100행)
+    for (let i = 2; i <= 100; i++) {
+      // 구분 열(B) 드롭다운
+      ws1.getCell(`B${i}`).dataValidation = {
+        type: 'list',
+        allowBlank: true,
+        formulae: ['"우선,전보유예"']
+      };
+      // 성별 열(E) 드롭다운
+      ws1.getCell(`E${i}`).dataValidation = {
+        type: 'list',
+        allowBlank: true,
+        formulae: ['"남,여"']
+      };
+    }
 
     // 시트2: 과원
     const ws2 = workbook.addWorksheet('과원');
@@ -346,6 +361,21 @@ export default function Priority() {
       });
     });
     ws2.columns.forEach((col) => { col.width = 12; });
+    // 드롭다운 설정 (2행~100행)
+    for (let i = 2; i <= 100; i++) {
+      // 현학교남기 열(E) 드롭다운
+      ws2.getCell(`E${i}`).dataValidation = {
+        type: 'list',
+        allowBlank: true,
+        formulae: ['"O"']
+      };
+      // 성별 열(F) 드롭다운
+      ws2.getCell(`F${i}`).dataValidation = {
+        type: 'list',
+        allowBlank: true,
+        formulae: ['"남,여"']
+      };
+    }
 
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
