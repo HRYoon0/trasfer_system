@@ -1,14 +1,10 @@
 import { useEffect, useState } from 'react';
-import { settingsApi, schoolApi } from '../services/api';
-import type { School } from '../types';
+import { settingsApi } from '../services/api';
 
 export default function Settings() {
   const [settings, setSettings] = useState<Record<string, string>>({});
-  const [schools, setSchools] = useState<School[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [bulkSchoolInput, setBulkSchoolInput] = useState('');
-  const [showBulkInput, setShowBulkInput] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -16,12 +12,8 @@ export default function Settings() {
 
   const loadData = async () => {
     try {
-      const [settingsRes, schoolsRes] = await Promise.all([
-        settingsApi.getAll(),
-        schoolApi.getAll(),
-      ]);
+      const settingsRes = await settingsApi.getAll();
       setSettings(settingsRes.data);
-      setSchools(schoolsRes.data);
     } catch (error) {
       console.error('설정 로딩 실패:', error);
     } finally {
@@ -61,40 +53,6 @@ export default function Settings() {
       alert('모든 데이터가 초기화되었습니다.');
     } catch (error) {
       console.error('전체 초기화 실패:', error);
-    }
-  };
-
-  const handleBulkSchoolAdd = async () => {
-    const lines = bulkSchoolInput.trim().split('\n').filter(Boolean);
-    if (lines.length === 0) {
-      alert('학교 목록을 입력해주세요.');
-      return;
-    }
-
-    const schoolsToAdd = lines.map((line, index) => {
-      const parts = line.split('\t');
-      return {
-        name: parts[0]?.trim() || '',
-        full_name: parts[1]?.trim() || parts[0]?.trim() || '',
-        quota: parseInt(parts[2]) || 0,
-        display_order: index + 1,
-      };
-    }).filter(s => s.name);
-
-    if (schoolsToAdd.length === 0) {
-      alert('유효한 학교 데이터가 없습니다.');
-      return;
-    }
-
-    try {
-      await schoolApi.createBulk(schoolsToAdd);
-      setBulkSchoolInput('');
-      setShowBulkInput(false);
-      loadData();
-      alert(`${schoolsToAdd.length}개 학교가 추가되었습니다.`);
-    } catch (error) {
-      console.error('학교 일괄 추가 실패:', error);
-      alert('학교 추가에 실패했습니다.');
     }
   };
 
@@ -175,93 +133,6 @@ export default function Settings() {
           <button onClick={handleInit} className="btn btn-secondary">
             기본값 복원
           </button>
-        </div>
-      </div>
-
-      {/* 벽지학교 설정 */}
-      <div className="card mb-6">
-        <h3 className="text-lg font-semibold mb-4">벽지/통합학교 설정</h3>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            벽지/통합학교 목록 (쉼표로 구분)
-          </label>
-          <textarea
-            className="input h-24"
-            placeholder="예: 벽지초, 통합초, 분교초"
-            value={settings.remote_schools || ''}
-            onChange={(e) => updateSetting('remote_schools', e.target.value)}
-          />
-          <p className="text-sm text-gray-500 mt-1">
-            벽지/통합학교는 배치 시 특별 처리됩니다.
-          </p>
-        </div>
-      </div>
-
-      {/* 학교 일괄 등록 */}
-      <div className="card mb-6">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold">학교 일괄 등록</h3>
-          <button
-            onClick={() => setShowBulkInput(!showBulkInput)}
-            className="btn btn-secondary"
-          >
-            {showBulkInput ? '닫기' : '일괄 등록'}
-          </button>
-        </div>
-
-        {showBulkInput && (
-          <>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                학교 목록 (탭으로 구분: 약칭 [탭] 전체명 [탭] 정원)
-              </label>
-              <textarea
-                className="input h-48 font-mono text-sm"
-                placeholder={`예시:\n양산초\t양산초등학교\t30\n물금초\t물금초등학교\t25\n...`}
-                value={bulkSchoolInput}
-                onChange={(e) => setBulkSchoolInput(e.target.value)}
-              />
-              <p className="text-sm text-gray-500 mt-1">
-                엑셀에서 복사하여 붙여넣기 하세요. 각 줄에 학교 하나씩 입력합니다.
-              </p>
-            </div>
-            <button onClick={handleBulkSchoolAdd} className="btn btn-success">
-              학교 일괄 추가
-            </button>
-          </>
-        )}
-
-        <div className="mt-4 text-sm text-gray-600">
-          현재 등록된 학교: {schools.length}개
-        </div>
-      </div>
-
-      {/* 결원 유형 */}
-      <div className="card mb-6">
-        <h3 className="text-lg font-semibold mb-4">결원/충원 유형 코드</h3>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              결원 유형 (코드:이름, 줄바꿈 구분)
-            </label>
-            <textarea
-              className="input h-32 font-mono text-sm"
-              placeholder={`예시:\n승진:승진\n관외전출:관외전출\n교환:교환\n파견:파견`}
-              value={settings.vacancy_types || ''}
-              onChange={(e) => updateSetting('vacancy_types', e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              충원 유형 (코드:이름, 줄바꿈 구분)
-            </label>
-            <textarea
-              className="input h-32 font-mono text-sm"
-              placeholder={`예시:\n신규:신규임용\n복직:복직\n관외전입:관외전입`}
-              value={settings.supplement_types || ''}
-              onChange={(e) => updateSetting('supplement_types', e.target.value)}
-            />
-          </div>
         </div>
       </div>
 

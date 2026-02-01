@@ -1,318 +1,522 @@
-import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
-import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
 import type { InternalTransfer, SchoolShortage, ExternalOut, ExternalIn } from '../types';
 
-// jsPDF 타입 확장
-declare module 'jspdf' {
-  interface jsPDF {
-    autoTable: (options: any) => jsPDF;
+// 학교명을 기관명으로 변환 (원본 VBA의 출력물기관명 함수)
+function getOfficialSchoolName(shortName: string): string {
+  if (!shortName) return '';
+  if (shortName.includes('초등학교') || shortName.includes('분교')) {
+    return shortName;
   }
+  return `${shortName}초등학교`;
 }
 
-// 한글 폰트 지원을 위한 설정 (기본 폰트 사용)
-const PDF_OPTIONS = {
-  orientation: 'portrait' as const,
-  unit: 'mm' as const,
-  format: 'a4' as const,
-};
-
-// 헤더와 데이터로 시트 생성 (데이터가 없어도 헤더 표시)
-function createSheetWithHeaders(headers: string[], data: any[][], colWidths?: number[]) {
-  const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
-  if (colWidths) {
-    ws['!cols'] = colWidths.map(wch => ({ wch }));
-  }
-  return ws;
-}
-
-// 발령대장 (Excel) - exceljs로 직접 스타일 적용
-export async function exportAssignmentList(
-  transfers: InternalTransfer[],
-  settings: Record<string, string>
-) {
-  const assignedTransfers = transfers.filter(t => t.assigned_school_id);
-  const appointmentDate = settings.appointment_date || '2025-03-01';
-  const officeName = settings.office_name || '양산교육지원청';
-
+// 템플릿 로드 헬퍼 함수
+async function loadTemplate(templatePath: string): Promise<ExcelJS.Workbook> {
+  const response = await fetch(templatePath);
+  const buffer = await response.arrayBuffer();
   const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet('발령대장');
+  await workbook.xlsx.load(buffer);
+  return workbook;
+}
 
-  // 열 너비 설정 (원본과 동일)
-  worksheet.columns = [
-    { key: 'A', width: 3 },
-    { key: 'B', width: 5 },
-    { key: 'C', width: 10 },  // 발령일자
-    { key: 'D', width: 17 },  // 소속
-    { key: 'E', width: 5 },   // 직급
-    { key: 'F', width: 9 },   // 성명
-    { key: 'G', width: 37 },  // 발령사항
-    { key: 'H', width: 9 },   // 발령권자
-    { key: 'I', width: 12 },  // 발령근거
-    { key: 'J', width: 8 },   // 기재자
-    { key: 'K', width: 8 },   // 확인자
-    { key: 'L', width: 7 },   // 비고
-  ];
-
-  // 2행: 제목 (B2:L2 병합)
-  worksheet.mergeCells('B2:L2');
-  const titleCell = worksheet.getCell('B2');
-  titleCell.value = '발  령  대  장';
-  titleCell.font = { size: 18, bold: true };
-  titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
-  worksheet.getRow(2).height = 30;
-
-  // 3행: 헤더 (B~L열, 원본과 동일한 테두리)
-  const headers = ['', '', '발령일자', '소속', '직급', '성  명', '발령 사항', '발령권자', '발령근거', '기재자\n날  인', '확인자\n날  인', '비고'];
-  const headerRow = worksheet.getRow(3);
-
-  // B열 헤더 (왼쪽 외곽선 medium)
-  const cellB3 = headerRow.getCell(2);
-  cellB3.border = { top: { style: 'medium' }, bottom: { style: 'medium' }, left: { style: 'medium' }, right: { style: 'thin' } };
-  cellB3.font = { bold: true };
-  cellB3.alignment = { horizontal: 'center', vertical: 'middle' };
-
-  // C열 헤더 (왼쪽 테두리 없음)
-  const cellC3 = headerRow.getCell(3);
-  cellC3.value = headers[2];
-  cellC3.border = { top: { style: 'medium' }, bottom: { style: 'medium' }, right: { style: 'thin' } };
-  cellC3.font = { bold: true };
-  cellC3.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-
-  // D~K열 헤더 (내부 thin)
-  for (let col = 4; col <= 11; col++) {
-    const cell = headerRow.getCell(col);
-    cell.value = headers[col - 1];
-    cell.border = { top: { style: 'medium' }, bottom: { style: 'medium' }, left: { style: 'thin' }, right: { style: 'thin' } };
-    cell.font = { bold: true };
-    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-  }
-
-  // L열 헤더 (오른쪽 외곽선 medium)
-  const cellL3 = headerRow.getCell(12);
-  cellL3.value = headers[11];
-  cellL3.border = { top: { style: 'medium' }, bottom: { style: 'medium' }, left: { style: 'thin' }, right: { style: 'medium' } };
-  cellL3.font = { bold: true };
-  cellL3.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-
-  headerRow.height = 30;
-
-  // 4행부터 데이터 또는 빈 행
-  const dataStartRow = 4;
-  const totalRows = Math.max(assignedTransfers.length, 705); // 최소 705행 (원본: 15행 x 47블록)
-
-  for (let i = 0; i < totalRows; i++) {
-    const rowNum = dataStartRow + i;
-    const row = worksheet.getRow(rowNum);
-    const transfer = assignedTransfers[i];
-
-    // 15행마다 굵은 하단선 (3, 18, 33, 48...)
-    const isThickBottomRow = (rowNum - 3) % 15 === 0;
-    const bottomStyle = isThickBottomRow ? 'medium' : 'thin';
-
-    // B열 (왼쪽 외곽선 medium)
-    row.getCell(2).border = { top: { style: 'thin' }, bottom: { style: bottomStyle }, left: { style: 'medium' }, right: { style: 'thin' } };
-
-    // C열 (왼쪽 테두리 없음)
-    row.getCell(3).border = { top: { style: 'thin' }, bottom: { style: bottomStyle }, right: { style: 'thin' } };
-    row.getCell(3).alignment = { horizontal: 'center', vertical: 'middle' };
-
-    // D~K열 (내부 thin)
-    for (let col = 4; col <= 11; col++) {
-      const cell = row.getCell(col);
-      cell.border = { top: { style: 'thin' }, bottom: { style: bottomStyle }, left: { style: 'thin' }, right: { style: 'thin' } };
-      cell.alignment = { horizontal: 'center', vertical: 'middle' };
-    }
-
-    // L열 (오른쪽 외곽선 medium)
-    row.getCell(12).border = { top: { style: 'thin' }, bottom: { style: bottomStyle }, left: { style: 'thin' }, right: { style: 'medium' } };
-    row.getCell(12).alignment = { horizontal: 'center', vertical: 'middle' };
-
-    if (transfer) {
-      row.getCell(3).value = appointmentDate;       // C: 발령일자
-      row.getCell(4).value = transfer.current_school_name || '';  // D: 소속
-      row.getCell(5).value = '교사';                 // E: 직급
-      row.getCell(6).value = transfer.teacher_name;  // F: 성명
-      row.getCell(7).value = `${transfer.assigned_school_name || ''} 발령`; // G: 발령사항
-      row.getCell(7).alignment = { horizontal: 'left', vertical: 'middle' };
-      row.getCell(8).value = `${officeName} 교육장`; // H: 발령권자
-      row.getCell(12).value = transfer.note || '';   // L: 비고
-    }
-
-    row.height = 20;
-    row.commit();
-  }
-
-  // 파일 다운로드
+// 파일 다운로드 헬퍼 함수
+async function downloadWorkbook(workbook: ExcelJS.Workbook, filename: string) {
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `발령대장_${settings.transfer_year || '2025'}.xlsx`;
+  link.download = filename;
   link.click();
   URL.revokeObjectURL(url);
 }
 
-// 학교별 과부족 현황 (Excel)
-export function exportSchoolShortage(
-  shortages: SchoolShortage[],
+// =====================================================
+// 1. 발령대장 - 원본 템플릿 기반 (양산 발령자만 = 전입)
+// =====================================================
+export async function exportAssignmentList(
+  internalTransfers: InternalTransfer[],
+  externalIn: ExternalIn[],
   settings: Record<string, string>
 ) {
-  const headers = ['순번', '학교명', '정원', '현원', '과부족', '상태'];
-  const data = shortages.map((s, index) => [
-    index + 1,
-    s.name,
-    s.quota,
-    s.current_count,
-    s.shortage,
-    s.shortage < 0 ? '결원' : s.shortage > 0 ? '과원' : '정원',
-  ]);
+  const workbook = await loadTemplate('/templates/assignment_list_template.xlsx');
+  const worksheet = workbook.getWorksheet('발령대장');
+  if (!worksheet) throw new Error('발령대장 시트를 찾을 수 없습니다.');
 
-  const ws = createSheetWithHeaders(headers, data, [5, 15, 8, 8, 8, 8]);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, '과부족현황');
+  const appointmentDate = settings.appointment_date || '2025.3.1';
+  const issuer = settings.issuer || '경상남도양산교육지원청교육장';
 
-  const fileName = `학교별_과부족현황_${settings.transfer_year || '2025'}.xlsx`;
-  XLSX.writeFile(wb, fileName);
+  // 데이터 준비 (양산으로 발령나는 사람 = 전입)
+  interface DataRow {
+    소속: string;
+    성명: string;
+    발령사항: string;
+    정렬키: number;
+  }
+
+  const dataRows: DataRow[] = [];
+
+  // 관내 전입 (관내 전보로 배치된 교사)
+  const assignedInternal = internalTransfers.filter(t => t.assigned_school_id);
+  assignedInternal.forEach(t => {
+    dataRows.push({
+      소속: getOfficialSchoolName(t.current_school_name || ''),
+      성명: t.teacher_name,
+      발령사항: `${getOfficialSchoolName(t.assigned_school_name || '')} 근무를 명함.`,
+      정렬키: 1,
+    });
+  });
+
+  // 관외 전입 (타시군, 타시도, 신규)
+  externalIn.forEach(t => {
+    let 소속 = '';
+    let 정렬키 = 2;
+
+    if (t.transfer_type === '신규') {
+      소속 = '신규';
+      정렬키 = 4;
+    } else if (t.transfer_type === '타시도') {
+      소속 = t.origin_school?.includes('분교') ? t.origin_school : `${t.origin_school || ''}초등학교`;
+      정렬키 = 3;
+    } else {
+      // 타시군
+      소속 = t.origin_school?.includes('분교') ? t.origin_school : `${t.origin_school || ''}초등학교`;
+      정렬키 = 2;
+    }
+
+    dataRows.push({
+      소속,
+      성명: t.teacher_name,
+      발령사항: `${getOfficialSchoolName(t.assigned_school_name || '')} 근무를 명함.`,
+      정렬키,
+    });
+  });
+
+  // 정렬
+  dataRows.sort((a, b) => a.정렬키 - b.정렬키);
+
+  // 데이터 행 작성 (4행부터)
+  const dataStartRow = 4;
+  dataRows.forEach((data, i) => {
+    const rowNum = dataStartRow + i;
+    const row = worksheet.getRow(rowNum);
+
+    row.getCell('B').value = i + 1;  // 순번
+    row.getCell('C').value = appointmentDate;
+    row.getCell('D').value = data.소속;
+    row.getCell('E').value = '교사';
+    row.getCell('F').value = data.성명;
+    row.getCell('G').value = data.발령사항;
+    row.getCell('H').value = issuer;
+  });
+
+  // 여백 행
+  if (dataRows.length > 0) {
+    const emptyRow = worksheet.getRow(dataStartRow + dataRows.length);
+    emptyRow.getCell('D').value = '- 이하 여백 -';
+  }
+
+  await downloadWorkbook(workbook, `발령대장_${settings.transfer_year || '2025'}.xlsx`);
 }
 
-// 관내전출입 명부 (Excel)
-export function exportInternalTransferList(
-  transfers: InternalTransfer[],
-  settings: Record<string, string>
-) {
-  const headers = ['순번', '성명', '성별', '생년월일', '현소속', '1지망', '2지망', '3지망',
-                   '총점', '동점1', '동점2', '동점3', '희망순위', '배치학교', '제외사유', '만기자', '우선배치', '비고'];
-  const data = transfers.map((t, index) => [
-    index + 1,
-    t.teacher_name,
-    t.gender || '',
-    t.birth_date || '',
-    t.current_school_name || '',
-    t.wish_school_1_name || '',
-    t.wish_school_2_name || '',
-    t.wish_school_3_name || '',
-    t.total_score,
-    t.tiebreaker_1,
-    t.tiebreaker_2,
-    t.tiebreaker_3,
-    t.preference_round,
-    t.assigned_school_name || '',
-    t.exclusion_reason || '',
-    t.is_expired ? 'O' : '',
-    t.is_priority ? 'O' : '',
-    t.note || '',
-  ]);
-
-  const ws = createSheetWithHeaders(headers, data);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, '관내전출입명부');
-
-  const fileName = `관내전출입명부_${settings.transfer_year || '2025'}.xlsx`;
-  XLSX.writeFile(wb, fileName);
-}
-
-// 관외전출 명부 (Excel)
-export function exportExternalOutList(
-  transfers: ExternalOut[],
-  settings: Record<string, string>
-) {
-  const headers = ['순번', '유형', '성명', '성별', '현소속', '전출지', '별도정원', '비고'];
-  const data = transfers.map((t, index) => [
-    index + 1,
-    t.transfer_type,
-    t.teacher_name,
-    t.gender || '',
-    t.school_name || '',
-    t.destination || '',
-    t.separate_quota || '',
-    t.note || '',
-  ]);
-
-  const ws = createSheetWithHeaders(headers, data, [5, 8, 10, 5, 15, 15, 10, 20]);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, '관외전출명부');
-
-  const fileName = `관외전출명부_${settings.transfer_year || '2025'}.xlsx`;
-  XLSX.writeFile(wb, fileName);
-}
-
-// 관외전입 명부 (Excel)
-export function exportExternalInList(
-  transfers: ExternalIn[],
-  settings: Record<string, string>
-) {
-  const headers = ['순번', '유형', '성명', '성별', '원소속', '배치학교', '별도정원', '비고'];
-  const data = transfers.map((t, index) => [
-    index + 1,
-    t.transfer_type,
-    t.teacher_name,
-    t.gender || '',
-    t.origin_school || '',
-    t.assigned_school_name || '',
-    t.separate_quota || '',
-    t.note || '',
-  ]);
-
-  const ws = createSheetWithHeaders(headers, data, [5, 8, 10, 5, 15, 15, 10, 20]);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, '관외전입명부');
-
-  const fileName = `관외전입명부_${settings.transfer_year || '2025'}.xlsx`;
-  XLSX.writeFile(wb, fileName);
-}
-
-// 전보 통지서 (PDF) - 개별 출력
-export function exportTransferNotice(
+// =====================================================
+// 2. 통지서 (관내 전보) - 원본 템플릿 기반
+// =====================================================
+export async function exportTransferNotice(
   transfer: InternalTransfer,
   settings: Record<string, string>
 ) {
-  const doc = new jsPDF(PDF_OPTIONS);
+  const workbook = await loadTemplate('/templates/notice_template.xlsx');
+  const worksheet = workbook.getWorksheet('통지서');
+  if (!worksheet) throw new Error('통지서 시트를 찾을 수 없습니다.');
 
-  const officeName = settings.office_name || '양산교육지원청';
-  const appointmentDate = settings.appointment_date || '2025-03-01';
+  const appointmentDate = settings.appointment_date || '2025년 3월 1일';
 
-  // 제목
-  doc.setFontSize(20);
-  doc.text('전 보 통 지 서', 105, 30, { align: 'center' });
+  // 데이터 채우기
+  worksheet.getCell('D4').value = getOfficialSchoolName(transfer.current_school_name || '');
+  worksheet.getCell('E5').value = '교사';
+  worksheet.getCell('G5').value = transfer.teacher_name;
+  worksheet.getCell('C9').value = `${getOfficialSchoolName(transfer.assigned_school_name || '')} 근무를 명함.`;
+  worksheet.getCell('B11').value = appointmentDate;
 
-  // 내용
-  doc.setFontSize(12);
-  const content = [
-    '',
-    `성    명: ${transfer.teacher_name}`,
-    '',
-    `현 소 속: ${transfer.current_school_name || ''}`,
-    '',
-    `발령학교: ${transfer.assigned_school_name || ''}`,
-    '',
-    `발령일자: ${appointmentDate}`,
-    '',
-    '',
-    `위와 같이 전보 발령되었음을 통지합니다.`,
-    '',
-    '',
-    '',
-    `${appointmentDate}`,
-    '',
-    '',
-    `${officeName} 교육장`,
-  ];
-
-  let y = 60;
-  content.forEach(line => {
-    doc.text(line, 30, y);
-    y += 10;
-  });
-
-  const fileName = `전보통지서_${transfer.teacher_name}.pdf`;
-  doc.save(fileName);
+  await downloadWorkbook(workbook, `통지서_${transfer.teacher_name}.xlsx`);
 }
 
-// 전보 통지서 일괄 출력 (PDF)
-export function exportAllTransferNotices(
+// =====================================================
+// 3. 통지서_타시군전출 - 원본 템플릿 기반
+// =====================================================
+export async function exportExternalTransferNotice(
+  transfer: ExternalOut,
+  settings: Record<string, string>
+) {
+  const workbook = await loadTemplate('/templates/notice_external_template.xlsx');
+  const worksheet = workbook.getWorksheet('통지서_타시군전출');
+  if (!worksheet) throw new Error('통지서_타시군전출 시트를 찾을 수 없습니다.');
+
+  const appointmentDate = settings.appointment_date || '2025년 3월 1일';
+
+  // 데이터 채우기 (원본 구조에 맞게)
+  worksheet.getCell('D4').value = getOfficialSchoolName(transfer.school_name || '');
+  worksheet.getCell('E5').value = '교사';
+  worksheet.getCell('G5').value = transfer.teacher_name;
+  worksheet.getCell('C9').value = `${transfer.destination || ''}교육장이 지정하는 초등학교 근무를 명함.`;
+  worksheet.getCell('B11').value = appointmentDate;
+
+  await downloadWorkbook(workbook, `통지서_타시군_${transfer.teacher_name}.xlsx`);
+}
+
+// =====================================================
+// 4. 임명장 - 원본 템플릿 기반
+// =====================================================
+export async function exportAppointmentLetter(
+  transfer: InternalTransfer | ExternalIn,
+  settings: Record<string, string>
+) {
+  const workbook = await loadTemplate('/templates/appointment_template.xlsx');
+  const worksheet = workbook.getWorksheet('임명장');
+  if (!worksheet) throw new Error('임명장 시트를 찾을 수 없습니다.');
+
+  const appointmentDate = settings.appointment_date || '2025년 3월 1일';
+  const assignedSchool = 'assigned_school_name' in transfer ? transfer.assigned_school_name : '';
+
+  // 원본 구조에 맞게 데이터 채우기 (임명장 템플릿 구조 확인 필요)
+  worksheet.getCell('F4').value = '교사';
+  worksheet.getCell('F5').value = transfer.teacher_name;
+  worksheet.getCell('C8').value = `${getOfficialSchoolName(assignedSchool || '')} 교사에 임함.`;
+  worksheet.getCell('C10').value = `${getOfficialSchoolName(assignedSchool || '')} 근무를 명함.`;
+  worksheet.getCell('C12').value = appointmentDate;
+
+  await downloadWorkbook(workbook, `임명장_${transfer.teacher_name}.xlsx`);
+}
+
+// =====================================================
+// 5. 기관통보 - 원본 템플릿 기반
+// =====================================================
+export async function exportInstitutionNotification(
+  type: '관내' | '관외',
+  internalTransfers: InternalTransfer[],
+  externalIn: ExternalIn[],
+  settings: Record<string, string>
+) {
+  const workbook = await loadTemplate('/templates/institution_notification_template.xlsx');
+  const worksheet = workbook.getWorksheet('기관통보');
+  if (!worksheet) throw new Error('기관통보 시트를 찾을 수 없습니다.');
+
+  const appointmentDate = settings.appointment_date || '2025.3.1';
+
+  // 제목 업데이트
+  worksheet.getCell('B1').value = `${appointmentDate}자 교육공무원 인사발령`;
+
+  // 데이터 준비
+  interface NotificationRow {
+    성명: string;
+    직위: string;
+    기관: string;
+    직급: string;
+    부서: string;
+    임용일자: string;
+  }
+
+  const dataRows: NotificationRow[] = [];
+
+  if (type === '관내') {
+    const assignedInternal = internalTransfers.filter(t => t.assigned_school_id);
+    assignedInternal.forEach(t => {
+      dataRows.push({
+        성명: t.teacher_name,
+        직위: '교사',
+        기관: `${getOfficialSchoolName(t.assigned_school_name || '')} 근무를 명함.`,
+        직급: '교사',
+        부서: getOfficialSchoolName(t.current_school_name || ''),
+        임용일자: appointmentDate,
+      });
+    });
+  } else {
+    externalIn.forEach(t => {
+      let 부서 = '';
+      if (t.transfer_type === '신규') {
+        부서 = '신규';
+      } else {
+        부서 = t.origin_school?.includes('분교') ? t.origin_school : `${t.origin_school || ''}초등학교`;
+      }
+
+      dataRows.push({
+        성명: t.teacher_name,
+        직위: '교사',
+        기관: `${getOfficialSchoolName(t.assigned_school_name || '')} 근무를 명함.`,
+        직급: '교사',
+        부서,
+        임용일자: appointmentDate,
+      });
+    });
+  }
+
+  // 데이터 행 작성 (4행부터)
+  const dataStartRow = 4;
+  dataRows.forEach((data, i) => {
+    const rowNum = dataStartRow + i;
+    const row = worksheet.getRow(rowNum);
+
+    row.getCell('B').value = i + 1;
+    row.getCell('C').value = data.성명;
+    row.getCell('D').value = data.직위;
+    row.getCell('E').value = data.기관;
+    row.getCell('F').value = data.직급;
+    row.getCell('G').value = data.부서;
+    row.getCell('H').value = data.임용일자;
+  });
+
+  // 여백 행
+  if (dataRows.length > 0) {
+    const emptyRow = worksheet.getRow(dataStartRow + dataRows.length);
+    emptyRow.getCell('E').value = '- 이하 여백 -';
+  }
+
+  await downloadWorkbook(workbook, `기관통보_${type}_${settings.transfer_year || '2025'}.xlsx`);
+}
+
+// =====================================================
+// 6. 임용서 - 원본 템플릿 기반
+// =====================================================
+export async function exportEmploymentLetter(
+  type: '관내' | '타시군' | '타시도' | '신규',
+  internalTransfers: InternalTransfer[],
+  externalIn: ExternalIn[],
+  settings: Record<string, string>
+) {
+  const workbook = await loadTemplate('/templates/employment_letter_template.xlsx');
+  const worksheet = workbook.getWorksheet('임용서');
+  if (!worksheet) throw new Error('임용서 시트를 찾을 수 없습니다.');
+
+  const appointmentDate = settings.appointment_date || '2025.3.1';
+
+  // 데이터 준비
+  interface EmploymentRow {
+    성명: string;
+    직급1: string;
+    성별: string;
+    부서1: string;
+    직급2: string;
+    부서2: string;
+    발령일자: string;
+  }
+
+  const dataRows: EmploymentRow[] = [];
+
+  if (type === '관내') {
+    const assignedInternal = internalTransfers.filter(t => t.assigned_school_id);
+    assignedInternal.forEach(t => {
+      dataRows.push({
+        성명: t.teacher_name,
+        직급1: '교사',
+        성별: t.gender || '',
+        부서1: `${getOfficialSchoolName(t.assigned_school_name || '')} 근무를 명함.`,
+        직급2: '교사',
+        부서2: getOfficialSchoolName(t.current_school_name || ''),
+        발령일자: appointmentDate,
+      });
+    });
+  } else {
+    const filtered = externalIn.filter(t => t.transfer_type === type);
+    filtered.forEach(t => {
+      let 부서2 = '';
+      if (t.transfer_type === '신규') {
+        부서2 = '신규';
+      } else {
+        부서2 = t.origin_school?.includes('분교') ? t.origin_school : `${t.origin_school || ''}초등학교`;
+      }
+
+      dataRows.push({
+        성명: t.teacher_name,
+        직급1: '교사',
+        성별: t.gender || '',
+        부서1: `${getOfficialSchoolName(t.assigned_school_name || '')} 근무를 명함.`,
+        직급2: '교사',
+        부서2,
+        발령일자: appointmentDate,
+      });
+    });
+  }
+
+  // 데이터 행 작성 (9행부터)
+  const dataStartRow = 9;
+  dataRows.forEach((data, i) => {
+    const rowNum = dataStartRow + i;
+    const row = worksheet.getRow(rowNum);
+
+    row.getCell('B').value = i + 1;
+    row.getCell('C').value = data.성명;
+    row.getCell('D').value = data.직급1;
+    row.getCell('E').value = data.성별;
+    row.getCell('F').value = data.부서1;
+    row.getCell('G').value = data.직급2;
+    row.getCell('H').value = data.부서2;
+    row.getCell('I').value = data.발령일자;
+  });
+
+  // 여백 행
+  if (dataRows.length > 0) {
+    const emptyRow = worksheet.getRow(dataStartRow + dataRows.length);
+    emptyRow.getCell('D').value = '- 이하 여백 -';
+  }
+
+  await downloadWorkbook(workbook, `임용서_${type}_${settings.transfer_year || '2025'}.xlsx`);
+}
+
+// =====================================================
+// 7. 학교별현황 - 원본 템플릿 기반
+// =====================================================
+export async function exportSchoolStatus(
+  schoolName: string,
+  schoolData: SchoolShortage | undefined,
+  internalTransfers: InternalTransfer[],
+  externalOut: ExternalOut[],
+  externalIn: ExternalIn[],
+  settings: Record<string, string>
+) {
+  const workbook = await loadTemplate('/templates/school_status_template.xlsx');
+  const worksheet = workbook.getWorksheet('학교별현황');
+  if (!worksheet) throw new Error('학교별현황 시트를 찾을 수 없습니다.');
+
+  // 데이터 계산
+  const 관내전출 = internalTransfers.filter(t => t.current_school_name === schoolName && t.assigned_school_id);
+  const 관내전출명단 = 관내전출.map(t => `${t.teacher_name}(${t.assigned_school_name})`).join(' ');
+  const 관내전출수 = 관내전출.filter(t => !t.note?.includes('휴직') && !t.note?.includes('파견')).length;
+
+  const 관외전출 = externalOut.filter(t => t.school_name === schoolName);
+  const 관외전출명단 = 관외전출.map(t => `${t.teacher_name}(${t.destination})`).join(' ');
+  const 관외전출수 = 관외전출.filter(t => !t.separate_quota).length;
+
+  const 관내전입 = internalTransfers.filter(t => t.assigned_school_name === schoolName);
+  const 관내전입명단 = 관내전입.map(t => `${t.teacher_name}(${t.current_school_name})`).join(' ');
+  const 관내전입수 = 관내전입.filter(t => !t.note?.includes('휴직') && !t.note?.includes('파견')).length;
+
+  const 관외전입 = externalIn.filter(t => t.assigned_school_name === schoolName);
+  const 관외전입명단 = 관외전입.map(t => `${t.teacher_name}(${t.origin_school})`).join(' ');
+  const 관외전입수 = 관외전입.filter(t => !t.separate_quota).length;
+
+  // 데이터 채우기
+  worksheet.getCell('B3').value = schoolName;
+  worksheet.getCell('B7').value = getOfficialSchoolName(schoolName);
+
+  worksheet.getCell('B10').value = schoolData?.quota || 0;
+  worksheet.getCell('C10').value = schoolData?.current_count || 0;
+  worksheet.getCell('D10').value = 0;
+  worksheet.getCell('E10').value = 0;
+  worksheet.getCell('F10').value = 관내전출수 + 관외전출수;
+  worksheet.getCell('G10').value = 관내전입수 + 관외전입수;
+  worksheet.getCell('H10').value = schoolData?.shortage || 0;
+
+  worksheet.getCell('D13').value = '';
+  worksheet.getCell('H13').value = 0;
+  worksheet.getCell('D14').value = '';
+  worksheet.getCell('H14').value = 0;
+  worksheet.getCell('D15').value = 관내전출명단;
+  worksheet.getCell('H15').value = 관내전출수 || '';
+  worksheet.getCell('D16').value = 관외전출명단;
+  worksheet.getCell('H16').value = 관외전출수 || '';
+  worksheet.getCell('D17').value = 관내전입명단;
+  worksheet.getCell('H17').value = 관내전입수 || '';
+  worksheet.getCell('D18').value = 관외전입명단;
+  worksheet.getCell('H18').value = 관외전입수 || '';
+
+  await downloadWorkbook(workbook, `학교별현황_${schoolName}_${settings.transfer_year || '2025'}.xlsx`);
+}
+
+// =====================================================
+// 7-2. 학교별현황 전체 출력 - 원본 템플릿 기반
+// =====================================================
+export async function exportAllSchoolStatus(
+  shortages: SchoolShortage[],
+  internalTransfers: InternalTransfer[],
+  externalOut: ExternalOut[],
+  externalIn: ExternalIn[],
+  settings: Record<string, string>
+) {
+  const templateResponse = await fetch('/templates/school_status_template.xlsx');
+  const templateBuffer = await templateResponse.arrayBuffer();
+
+  const workbook = new ExcelJS.Workbook();
+
+  for (const school of shortages) {
+    const templateWorkbook = new ExcelJS.Workbook();
+    await templateWorkbook.xlsx.load(templateBuffer);
+    const templateSheet = templateWorkbook.getWorksheet('학교별현황');
+    if (!templateSheet) continue;
+
+    const sheetName = school.name.substring(0, 31);
+    const ws = workbook.addWorksheet(sheetName);
+
+    // 열 너비 복사
+    templateSheet.columns.forEach((col, i) => {
+      if (col.width) ws.getColumn(i + 1).width = col.width;
+    });
+
+    // 행/셀 복사
+    templateSheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
+      if (rowNumber > 20) return;
+      const newRow = ws.getRow(rowNumber);
+      newRow.height = row.height;
+      row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+        const newCell = newRow.getCell(colNumber);
+        newCell.value = cell.value;
+        newCell.style = JSON.parse(JSON.stringify(cell.style));
+      });
+    });
+
+    // 병합 셀 복사
+    templateSheet.model.merges?.forEach((merge: string) => {
+      try { ws.mergeCells(merge); } catch { /* ignore */ }
+    });
+
+    // 데이터 계산
+    const 관내전출 = internalTransfers.filter(t => t.current_school_name === school.name && t.assigned_school_id);
+    const 관내전출명단 = 관내전출.map(t => `${t.teacher_name}(${t.assigned_school_name})`).join(' ');
+    const 관내전출수 = 관내전출.filter(t => !t.note?.includes('휴직') && !t.note?.includes('파견')).length;
+
+    const 관외전출 = externalOut.filter(t => t.school_name === school.name);
+    const 관외전출명단 = 관외전출.map(t => `${t.teacher_name}(${t.destination})`).join(' ');
+    const 관외전출수 = 관외전출.filter(t => !t.separate_quota).length;
+
+    const 관내전입 = internalTransfers.filter(t => t.assigned_school_name === school.name);
+    const 관내전입명단 = 관내전입.map(t => `${t.teacher_name}(${t.current_school_name})`).join(' ');
+    const 관내전입수 = 관내전입.filter(t => !t.note?.includes('휴직') && !t.note?.includes('파견')).length;
+
+    const 관외전입 = externalIn.filter(t => t.assigned_school_name === school.name);
+    const 관외전입명단 = 관외전입.map(t => `${t.teacher_name}(${t.origin_school})`).join(' ');
+    const 관외전입수 = 관외전입.filter(t => !t.separate_quota).length;
+
+    // 데이터 채우기
+    ws.getCell('B3').value = school.name;
+    ws.getCell('B7').value = getOfficialSchoolName(school.name);
+    ws.getCell('B10').value = school.quota || 0;
+    ws.getCell('C10').value = school.current_count || 0;
+    ws.getCell('D10').value = 0;
+    ws.getCell('E10').value = 0;
+    ws.getCell('F10').value = 관내전출수 + 관외전출수;
+    ws.getCell('G10').value = 관내전입수 + 관외전입수;
+    ws.getCell('H10').value = school.shortage || 0;
+    ws.getCell('D13').value = '';
+    ws.getCell('H13').value = 0;
+    ws.getCell('D14').value = '';
+    ws.getCell('H14').value = 0;
+    ws.getCell('D15').value = 관내전출명단;
+    ws.getCell('H15').value = 관내전출수 || '';
+    ws.getCell('D16').value = 관외전출명단;
+    ws.getCell('H16').value = 관외전출수 || '';
+    ws.getCell('D17').value = 관내전입명단;
+    ws.getCell('H17').value = 관내전입수 || '';
+    ws.getCell('D18').value = 관외전입명단;
+    ws.getCell('H18').value = 관외전입수 || '';
+  }
+
+  await downloadWorkbook(workbook, `학교별현황_전체_${settings.transfer_year || '2025'}.xlsx`);
+}
+
+// =====================================================
+// 통지서 일괄 출력 (Excel)
+// =====================================================
+export async function exportAllTransferNotices(
   transfers: InternalTransfer[],
   settings: Record<string, string>
 ) {
@@ -322,173 +526,323 @@ export function exportAllTransferNotices(
     return;
   }
 
-  const doc = new jsPDF(PDF_OPTIONS);
-  const officeName = settings.office_name || '양산교육지원청';
-  const appointmentDate = settings.appointment_date || '2025-03-01';
+  const templateResponse = await fetch('/templates/notice_template.xlsx');
+  const templateBuffer = await templateResponse.arrayBuffer();
+  const appointmentDate = settings.appointment_date || '2025년 3월 1일';
 
-  assignedTransfers.forEach((transfer, index) => {
-    if (index > 0) {
-      doc.addPage();
-    }
+  const workbook = new ExcelJS.Workbook();
 
-    // 제목
-    doc.setFontSize(20);
-    doc.text('전 보 통 지 서', 105, 30, { align: 'center' });
+  for (const transfer of assignedTransfers) {
+    const templateWorkbook = new ExcelJS.Workbook();
+    await templateWorkbook.xlsx.load(templateBuffer);
+    const templateSheet = templateWorkbook.getWorksheet('통지서');
+    if (!templateSheet) continue;
 
-    // 내용
-    doc.setFontSize(12);
-    const content = [
-      '',
-      `성    명: ${transfer.teacher_name}`,
-      '',
-      `현 소 속: ${transfer.current_school_name || ''}`,
-      '',
-      `발령학교: ${transfer.assigned_school_name || ''}`,
-      '',
-      `발령일자: ${appointmentDate}`,
-      '',
-      '',
-      `위와 같이 전보 발령되었음을 통지합니다.`,
-      '',
-      '',
-      '',
-      `${appointmentDate}`,
-      '',
-      '',
-      `${officeName} 교육장`,
-    ];
+    const sheetName = transfer.teacher_name.substring(0, 31);
+    const ws = workbook.addWorksheet(sheetName);
 
-    let y = 60;
-    content.forEach(line => {
-      doc.text(line, 30, y);
-      y += 10;
+    // 열 너비 복사
+    templateSheet.columns.forEach((col, i) => {
+      if (col.width) ws.getColumn(i + 1).width = col.width;
     });
-  });
 
-  const fileName = `전보통지서_전체_${settings.transfer_year || '2025'}.pdf`;
-  doc.save(fileName);
+    // 행/셀 복사
+    templateSheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
+      const newRow = ws.getRow(rowNumber);
+      newRow.height = row.height;
+      row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+        const newCell = newRow.getCell(colNumber);
+        newCell.value = cell.value;
+        newCell.style = JSON.parse(JSON.stringify(cell.style));
+      });
+    });
+
+    // 병합 셀 복사
+    templateSheet.model.merges?.forEach((merge: string) => {
+      try { ws.mergeCells(merge); } catch { /* ignore */ }
+    });
+
+    // 데이터 채우기
+    ws.getCell('D4').value = getOfficialSchoolName(transfer.current_school_name || '');
+    ws.getCell('E5').value = '교사';
+    ws.getCell('G5').value = transfer.teacher_name;
+    ws.getCell('C9').value = `${getOfficialSchoolName(transfer.assigned_school_name || '')} 근무를 명함.`;
+    ws.getCell('B11').value = appointmentDate;
+  }
+
+  await downloadWorkbook(workbook, `통지서_전체_${settings.transfer_year || '2025'}.xlsx`);
 }
 
-// 발령대장 (PDF) - 원본 양식에 맞춤
-export function exportAssignmentListPDF(
-  transfers: InternalTransfer[],
-  settings: Record<string, string>
+// =====================================================
+// 8. 통계표 - 원본 스크린샷과 동일한 단순 구조
+// =====================================================
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function exportStatistics(
+  statistics: any[],
+  totals: any
 ) {
-  const assignedTransfers = transfers.filter(t => t.assigned_school_id);
+  const workbook = new ExcelJS.Workbook();
+  const ws = workbook.addWorksheet('통계표');
 
-  const doc = new jsPDF({
-    ...PDF_OPTIONS,
-    orientation: 'landscape',
-  });
+  // 열 너비 설정
+  const colWidths = [4, 6, 6, 5, 5, 6, 5, 5, 5, 5, 5, 6, 5, 6, 5, 6, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 4, 4, 5, 5];
+  colWidths.forEach((w, i) => ws.getColumn(i + 1).width = w);
 
-  const officeName = settings.office_name || '양산교육지원청';
-  const transferYear = settings.transfer_year || '2025';
-  const appointmentDate = settings.appointment_date || '2025-03-01';
+  // 테두리 스타일
+  const border = { top: { style: 'thin' as const }, bottom: { style: 'thin' as const }, left: { style: 'thin' as const }, right: { style: 'thin' as const } };
 
-  // 제목
-  doc.setFontSize(16);
-  doc.text('발  령  대  장', 148.5, 15, { align: 'center' });
-  doc.setFontSize(10);
-  doc.text(`${transferYear}년도 교원 전보 - ${officeName}`, 148.5, 22, { align: 'center' });
+  // 1행 - 제목
+  ws.mergeCells('A1:AE1');
+  ws.getCell('A1').value = '관내 전보 현황 통계표';
+  ws.getCell('A1').font = { bold: true, size: 14 };
+  ws.getCell('A1').alignment = { horizontal: 'center' };
 
-  // 테이블 데이터 - 원본 양식에 맞춤
-  const tableData = assignedTransfers.map((t) => [
-    appointmentDate,
-    t.current_school_name || '',
-    '교사',
-    t.teacher_name,
-    `${t.assigned_school_name || ''} 발령`,
-    `${officeName} 교육장`,
-    '',
-    '',
-    '',
-    t.note || '',
-  ]);
+  // 3행 - 대분류 헤더
+  ws.getCell('A3').value = '학교\n코드'; ws.mergeCells('A3:A4');
+  ws.getCell('B3').value = '학교명'; ws.mergeCells('B3:B4');
+  ws.getCell('C3').value = '현원'; ws.mergeCells('C3:C4');
+  ws.getCell('D3').value = '정원'; ws.mergeCells('D3:D4');
+  ws.getCell('E3').value = '과부족'; ws.mergeCells('E3:E4');
+  ws.getCell('F3').value = '결원'; ws.mergeCells('F3:N3');
+  ws.getCell('O3').value = '충원'; ws.mergeCells('O3:Q3');
+  ws.getCell('R3').value = '전출'; ws.mergeCells('R3:U3');
+  ws.getCell('V3').value = '전입'; ws.mergeCells('V3:Z3');
+  ws.getCell('AA3').value = '현재\n과부족'; ws.mergeCells('AA3:AA4');
+  ws.getCell('AB3').value = '남여성비'; ws.mergeCells('AB3:AE3');
 
-  doc.autoTable({
-    startY: 30,
-    head: [['발령일자', '소속', '직급', '성명', '발령사항', '발령권자', '발령근거', '기재자', '확인자', '비고']],
-    body: tableData.length > 0 ? tableData : [['', '', '', '', '', '', '', '', '', '']],
-    styles: { fontSize: 8, cellPadding: 2 },
-    headStyles: { fillColor: [66, 139, 202] },
-    columnStyles: {
-      0: { cellWidth: 22 },
-      1: { cellWidth: 30 },
-      2: { cellWidth: 15 },
-      3: { cellWidth: 20 },
-      4: { cellWidth: 40 },
-      5: { cellWidth: 35 },
-      6: { cellWidth: 25 },
-      7: { cellWidth: 20 },
-      8: { cellWidth: 20 },
-      9: { cellWidth: 30 },
-    },
-  });
+  // 4행 - 세부 항목 헤더
+  const headers4 = ['', '', '', '', '', '정퇴', '명퇴', '면직', '승진', '전직', '타시도\n복귀', '기타', '별도\n정원', '계', '별도정원\n해제', '기타', '계', '타시도', '타시군', '관내', '계', '관내', '타시군', '타시도', '신규', '계', '', '남', '여', '남%', '여%'];
+  headers4.forEach((h, i) => { if (h && i >= 5) ws.getCell(4, i + 1).value = h; });
 
-  const fileName = `발령대장_${transferYear}.pdf`;
-  doc.save(fileName);
+  // 헤더 스타일 (3-4행)
+  for (let r = 3; r <= 4; r++) {
+    for (let c = 1; c <= 31; c++) {
+      const cell = ws.getCell(r, c);
+      cell.font = { bold: true, size: 9 };
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      cell.border = border;
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
+    }
+  }
+  // 결원 색상 (노랑)
+  for (let c = 6; c <= 14; c++) { ws.getCell(3, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF2CC' } }; ws.getCell(4, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF2CC' } }; }
+  // 충원 색상 (초록)
+  for (let c = 15; c <= 17; c++) { ws.getCell(3, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9EAD3' } }; ws.getCell(4, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9EAD3' } }; }
+  // 전출 색상 (빨강)
+  for (let c = 18; c <= 21; c++) { ws.getCell(3, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF4CCCC' } }; ws.getCell(4, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF4CCCC' } }; }
+  // 전입 색상 (파랑)
+  for (let c = 22; c <= 26; c++) { ws.getCell(3, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFCFE2F3' } }; ws.getCell(4, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFCFE2F3' } }; }
+  // 현재과부족 색상 (회색)
+  ws.getCell(3, 27).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9D9D9' } }; ws.getCell(4, 27).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9D9D9' } };
+  // 남여성비 색상 (주황)
+  for (let c = 28; c <= 31; c++) { ws.getCell(3, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFCE5CD' } }; ws.getCell(4, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFCE5CD' } }; }
+
+  ws.getRow(3).height = 30;
+  ws.getRow(4).height = 30;
+
+  // 데이터 입력 함수
+  const v = (val: number | undefined) => (val === 0 || val === undefined) ? 0 : val;
+  const writeRow = (rowNum: number, data: any, isTotalRow = false) => {
+    const row = ws.getRow(rowNum);
+    const values = [
+      isTotalRow ? '계' : data.code,
+      isTotalRow ? statistics.length : data.name,
+      v(data.currentCount), v(data.quota), v(data.shortage),
+      v(data.vacRetire), v(data.vacEarly), v(data.vacDismiss), v(data.vacPromote), v(data.vacTransfer), v(data.vacReturn), v(data.vacOther), v(data.vacSep), v(data.vacTotal),
+      v(data.supRelease), v(data.supOther), v(data.supTotal),
+      v(data.outCity), v(data.outDistrict), v(data.outInternal), v(data.outTotal),
+      v(data.inInternal), v(data.inDistrict), v(data.inCity), v(data.inNew), v(data.inTotal),
+      v(data.currentShortage),
+      v(data.male), v(data.female), v(data.maleRatio), v(data.femaleRatio)
+    ];
+    values.forEach((val, i) => {
+      const cell = row.getCell(i + 1);
+      cell.value = val;
+      cell.font = { size: 9, bold: isTotalRow };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.border = border;
+      if (isTotalRow) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8E8E8' } };
+    });
+  };
+
+  // 5행 - 합계
+  writeRow(5, totals, true);
+
+  // 6행부터 - 학교별 데이터
+  statistics.forEach((stat: any, i: number) => writeRow(6 + i, stat));
+
+  const year = new Date().getFullYear();
+  await downloadWorkbook(workbook, `통계표_${year}.xlsx`);
 }
 
-// 종합 현황표 (Excel) - 모든 데이터 포함
-export function exportComprehensiveReport(
-  data: {
-    schools: SchoolShortage[];
-    internalTransfers: InternalTransfer[];
-    externalOut: ExternalOut[];
-    externalIn: ExternalIn[];
-  },
-  settings: Record<string, string>
-) {
-  const wb = XLSX.utils.book_new();
+// =====================================================
+// 자료 입력 템플릿 다운로드 (원본 엑셀에서 추출한 템플릿 사용)
+// =====================================================
+export async function downloadDataTemplate() {
+  // 원본에서 추출한 템플릿 파일 로드
+  const workbook = await loadTemplate('/templates/data_entry_template.xlsx');
 
-  // 학교별 현황
-  const schoolHeaders = ['순번', '학교명', '정원', '현원', '과부족'];
-  const schoolData = data.schools.map((s, i) => [
-    i + 1,
-    s.name,
-    s.quota,
-    s.current_count,
-    s.shortage,
-  ]);
-  const ws1 = createSheetWithHeaders(schoolHeaders, schoolData, [5, 15, 8, 8, 8]);
-  XLSX.utils.book_append_sheet(wb, ws1, '학교별현황');
+  // 기존 데이터 삭제 (순번과 수식 열은 유지)
+  const clearSheetData = (sheetName: string, dataStartRow: number, cols: string[]) => {
+    const ws = workbook.getWorksheet(sheetName);
+    if (!ws) return;
 
-  // 관내전출입
-  const internalHeaders = ['순번', '성명', '현소속', '배치학교', '희망순위', '총점', '상태'];
-  const internalData = data.internalTransfers.map((t, i) => [
-    i + 1,
-    t.teacher_name,
-    t.current_school_name || '',
-    t.assigned_school_name || '',
-    t.preference_round,
-    t.total_score,
-    t.assigned_school_id ? '배치완료' : t.exclusion_reason ? '제외' : '미배치',
-  ]);
-  const ws2 = createSheetWithHeaders(internalHeaders, internalData);
-  XLSX.utils.book_append_sheet(wb, ws2, '관내전출입');
+    for (let row = dataStartRow; row <= 200; row++) {
+      cols.forEach(col => {
+        const cell = ws.getCell(`${col}${row}`);
+        const hasFormula = cell.formula ||
+          (cell.value && typeof cell.value === 'object' && 'formula' in cell.value);
+        if (!hasFormula) {
+          cell.value = null;
+        }
+      });
+    }
+  };
 
-  // 관외전출
-  const extOutHeaders = ['순번', '성명', '현소속', '전출지'];
-  const extOutData = data.externalOut.map((t, i) => [
-    i + 1,
-    t.teacher_name,
-    t.school_name || '',
-    t.destination || '',
-  ]);
-  const ws3 = createSheetWithHeaders(extOutHeaders, extOutData, [5, 10, 15, 15]);
-  XLSX.utils.book_append_sheet(wb, ws3, '관외전출');
+  // 1정현원 시트: 5행부터
+  clearSheetData('1정현원', 5, ['C', 'D', 'E', 'G']);
 
-  // 관외전입
-  const extInHeaders = ['순번', '성명', '원소속', '배치학교'];
-  const extInData = data.externalIn.map((t, i) => [
-    i + 1,
-    t.teacher_name,
-    t.origin_school || '',
-    t.assigned_school_name || '',
-  ]);
-  const ws4 = createSheetWithHeaders(extInHeaders, extInData, [5, 10, 15, 15]);
-  XLSX.utils.book_append_sheet(wb, ws4, '관외전입');
+  // 2결원 시트: 3행부터
+  clearSheetData('2결원', 3, ['B', 'C', 'D', 'E', 'F', 'G']);
 
-  const fileName = `전보종합현황_${settings.transfer_year || '2025'}.xlsx`;
-  XLSX.writeFile(wb, fileName);
+  // 3충원 시트: 3행부터
+  clearSheetData('3충원', 3, ['B', 'C', 'D', 'E', 'F', 'G']);
+
+  // 4관외전출 시트: 3행부터
+  clearSheetData('4관외전출', 3, ['B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']);
+
+  // 현임교 열에 드롭다운 추가 + 순번 설정
+  const sheetsWithDropdown = ['2결원', '3충원', '4관외전출'];
+  for (const sheetName of sheetsWithDropdown) {
+    const ws = workbook.getWorksheet(sheetName);
+    if (!ws) continue;
+
+    // A열 너비 설정
+    ws.getColumn('A').width = 6;
+
+    for (let row = 3; row <= 102; row++) {
+      // A열: 순번 명시적으로 재설정
+      ws.getCell(`A${row}`).value = row - 2;
+
+      // C열: 현임교 드롭다운
+      ws.getCell(`C${row}`).dataValidation = {
+        type: 'list',
+        allowBlank: true,
+        formulae: ["OFFSET('1정현원'!$C$5,0,0,COUNTA('1정현원'!$C$5:$C$104),1)"],
+      };
+    }
+  }
+
+  await downloadWorkbook(workbook, '자료입력_템플릿.xlsx');
+}
+
+// 템플릿 파싱 결과 타입
+export interface TemplateParseResult {
+  schools: { code: number; name: string; maleCount: number; femaleCount: number; quota: number }[];
+  vacancies: { type: string; school: string; name: string; gender: string; birth: string; note: string }[];
+  supplements: { type: string; school: string; name: string; gender: string; birth: string; note: string }[];
+  externalOuts: { type: string; school: string; name: string; gender: string; birth: string; destination: string; separate: string; note: string }[];
+}
+
+// 템플릿 파싱 (원본 엑셀과 동일한 구조)
+export async function parseDataTemplate(file: File): Promise<TemplateParseResult> {
+  const buffer = await file.arrayBuffer();
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(buffer);
+
+  const result: TemplateParseResult = {
+    schools: [],
+    vacancies: [],
+    supplements: [],
+    externalOuts: [],
+  };
+
+  // 1정현원 시트 파싱 (5행부터 데이터, B:코드, C:학교명, D:남, E:여, G:정원)
+  const wsSchool = workbook.getWorksheet('1정현원') || workbook.getWorksheet('학교관리');
+  if (wsSchool) {
+    wsSchool.eachRow((row, rowNum) => {
+      if (rowNum <= 4) return; // 헤더(1-4행) 스킵
+      const code = row.getCell(2).value; // B열: 학교코드
+      const name = row.getCell(3).value?.toString().trim(); // C열: 학교명
+      const maleCount = row.getCell(4).value; // D열: 현원 남
+      const femaleCount = row.getCell(5).value; // E열: 현원 여
+      const quota = row.getCell(7).value; // G열: 정원
+      if (name && name !== '(학교명 입력)') {
+        result.schools.push({
+          code: typeof code === 'number' ? code : parseInt(code?.toString() || '0') || rowNum - 4,
+          name,
+          maleCount: typeof maleCount === 'number' ? maleCount : parseInt(maleCount?.toString() || '0') || 0,
+          femaleCount: typeof femaleCount === 'number' ? femaleCount : parseInt(femaleCount?.toString() || '0') || 0,
+          quota: typeof quota === 'number' ? quota : parseInt(quota?.toString() || '0') || 0,
+        });
+      }
+    });
+  }
+
+  // 2결원 시트 파싱 (3행부터 데이터)
+  const wsVacancy = workbook.getWorksheet('2결원') || workbook.getWorksheet('결원');
+  if (wsVacancy) {
+    wsVacancy.eachRow((row, rowNum) => {
+      if (rowNum <= 2) return; // 제목(1행), 헤더(2행) 스킵
+      const type = row.getCell(2).value?.toString().trim(); // B열: 구분
+      const school = row.getCell(3).value?.toString().trim(); // C열: 현임교
+      const name = row.getCell(4).value?.toString().trim(); // D열: 성명
+      if (type && school && name) {
+        result.vacancies.push({
+          type,
+          school,
+          name,
+          gender: row.getCell(5).value?.toString().trim() || '', // E열
+          birth: row.getCell(6).value?.toString().trim() || '', // F열
+          note: row.getCell(7).value?.toString().trim() || '', // G열
+        });
+      }
+    });
+  }
+
+  // 3충원 시트 파싱 (3행부터 데이터)
+  const wsSupplement = workbook.getWorksheet('3충원') || workbook.getWorksheet('충원');
+  if (wsSupplement) {
+    wsSupplement.eachRow((row, rowNum) => {
+      if (rowNum <= 2) return;
+      const type = row.getCell(2).value?.toString().trim();
+      const school = row.getCell(3).value?.toString().trim();
+      const name = row.getCell(4).value?.toString().trim();
+      if (type && school && name) {
+        result.supplements.push({
+          type,
+          school,
+          name,
+          gender: row.getCell(5).value?.toString().trim() || '',
+          birth: row.getCell(6).value?.toString().trim() || '',
+          note: row.getCell(7).value?.toString().trim() || '',
+        });
+      }
+    });
+  }
+
+  // 4관외전출 시트 파싱 (3행부터 데이터)
+  const wsExternalOut = workbook.getWorksheet('4관외전출') || workbook.getWorksheet('관외전출');
+  if (wsExternalOut) {
+    wsExternalOut.eachRow((row, rowNum) => {
+      if (rowNum <= 2) return;
+      const type = row.getCell(2).value?.toString().trim(); // B열: 구분
+      const school = row.getCell(3).value?.toString().trim(); // C열: 현임교
+      const name = row.getCell(4).value?.toString().trim(); // D열: 성명
+      if (type && school && name) {
+        result.externalOuts.push({
+          type,
+          school,
+          name,
+          gender: row.getCell(5).value?.toString().trim() || '', // E열
+          birth: row.getCell(6).value?.toString().trim() || '', // F열
+          destination: row.getCell(7).value?.toString().trim() || '', // G열
+          separate: row.getCell(8).value?.toString().trim() || '', // H열
+          note: row.getCell(9).value?.toString().trim() || '', // I열
+        });
+      }
+    });
+  }
+
+  return result;
 }
