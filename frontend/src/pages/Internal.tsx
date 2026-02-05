@@ -15,6 +15,9 @@ export default function Internal() {
   const [shortages, setShortages] = useState<SchoolShortage[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+  const [progressLog, setProgressLog] = useState<string[]>([]); // 진행 상황 로그
+  const [showProgressModal, setShowProgressModal] = useState(false); // 진행 상황 모달 표시
+  const logContainerRef = useRef<HTMLDivElement>(null); // 로그 컨테이너 ref
 
   // 정렬 상태
   const [sortType, setSortType] = useState<SortType>('score');
@@ -40,6 +43,13 @@ export default function Internal() {
   useEffect(() => {
     loadData();
   }, []);
+
+  // 로그 자동 스크롤
+  useEffect(() => {
+    if (logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+    }
+  }, [progressLog]);
 
   const loadData = async () => {
     try {
@@ -530,19 +540,31 @@ export default function Internal() {
 
   // 과원해소 점검
   const handleCheckSurplus = async () => {
-    if (!confirm('과원해소를 점검하시겠습니까?\n\n- 과원 탭에서 "현학교 남기"가 체크된 교사 대상\n- 1~3희망 시뮬레이션으로 자리 생기면 과원해소 처리\n- 과원순번이 높은(숫자가 큰) 사람부터 해소')) return;
+    if (!confirm('과원해소를 점검하시겠습니까?\n\n- 과원 탭의 모든 과원자 대상 (남기/전보희망 모두)\n- 과원순번이 높은(숫자가 큰) 사람부터 처리\n- 남기 선택자: 조건 충족 시 과원해소 (배치 취소)\n- 전보희망: 배치되면 스킵, 미배치+조건충족 시 과원해소\n- 미배치+조건미충족: 만기미발령')) return;
     setProcessing(true);
+    setProgressLog([]); // 로그 초기화
+    setShowProgressModal(true); // 모달 표시
     try {
-      const res = await assignmentApi.checkSurplus();
+      const res = await assignmentApi.checkSurplus((msg: string) => {
+        setProgressLog(prev => [...prev.slice(-50), msg]); // 최근 50개 로그 유지
+      });
       const result = res.data as { checked: number; message: string };
-      alert(`과원해소 점검 완료!\n\n${result.message}`);
+      // 완료 메시지 추가
+      setProgressLog(prev => [...prev, '', `✅ ${result.message}`]);
       loadData();
     } catch (error) {
       console.error('과원해소 점검 실패:', error);
-      alert('과원해소 점검 중 오류가 발생했습니다.');
+      setProgressLog(prev => [...prev, '', '❌ 과원해소 점검 중 오류가 발생했습니다.']);
     } finally {
       setProcessing(false);
+      // 모달은 유지, 확인 버튼으로 닫음
     }
+  };
+
+  // 진행 상황 모달 닫기
+  const closeProgressModal = () => {
+    setShowProgressModal(false);
+    setProgressLog([]);
   };
 
   // 배치 실행 (자동 전체 배치)
@@ -938,6 +960,38 @@ export default function Internal() {
 
   return (
     <div className="p-8">
+      {/* 진행 상황 오버레이 */}
+      {showProgressModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-[500px] max-h-[500px] overflow-hidden flex flex-col">
+            <h3 className="text-lg font-semibold mb-3">
+              {processing ? '과원해소 점검 중...' : '과원해소 점검 완료'}
+            </h3>
+            <div ref={logContainerRef} className="bg-gray-100 rounded p-3 flex-1 overflow-y-auto font-mono text-sm min-h-[300px]">
+              {progressLog.map((msg, idx) => (
+                <div key={idx} className={
+                  msg.includes('✓') || msg.includes('✅') ? 'text-green-600' :
+                  msg.includes('★') || msg.includes('❌') ? 'text-red-600' :
+                  'text-gray-700'
+                }>
+                  {msg}
+                </div>
+              ))}
+            </div>
+            {!processing && (
+              <div className="mt-4 flex justify-end">
+                <button
+                  onClick={closeProgressModal}
+                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                >
+                  확인
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* 숨겨진 파일 입력 */}
       <input
         type="file"

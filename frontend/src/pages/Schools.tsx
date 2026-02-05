@@ -247,18 +247,20 @@ export default function Schools() {
                   {editingId === school.id ? (
                     <>
                       <td className="text-center">{idx + 1}</td>
-                      <td>
+                      <td style={{ minWidth: '120px' }}>
                         <input
                           type="text"
-                          className="input w-full"
+                          className="w-full border border-yellow-400 rounded"
+                          style={{ padding: '6px 8px', backgroundColor: '#fefce8', height: '32px' }}
                           value={editForm.name ?? ''}
                           onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
                         />
                       </td>
-                      <td className="bg-blue-50">
+                      <td className="bg-blue-50" style={{ minWidth: '80px' }}>
                         <input
                           type="number"
-                          className="input w-14 text-center"
+                          className="text-center border border-yellow-400 rounded"
+                          style={{ padding: '6px 8px', backgroundColor: '#fefce8', height: '32px', width: '70px' }}
                           value={editForm.male_count ?? 0}
                           onChange={(e) => {
                             const male = parseInt(e.target.value) || 0;
@@ -266,10 +268,11 @@ export default function Schools() {
                           }}
                         />
                       </td>
-                      <td className="bg-blue-50">
+                      <td className="bg-blue-50" style={{ minWidth: '80px' }}>
                         <input
                           type="number"
-                          className="input w-14 text-center"
+                          className="text-center border border-yellow-400 rounded"
+                          style={{ padding: '6px 8px', backgroundColor: '#fefce8', height: '32px', width: '70px' }}
                           value={editForm.female_count ?? 0}
                           onChange={(e) => {
                             const female = parseInt(e.target.value) || 0;
@@ -278,16 +281,17 @@ export default function Schools() {
                         />
                       </td>
                       <td className="text-center bg-blue-100 font-medium">{(editForm.male_count || 0) + (editForm.female_count || 0)}</td>
-                      <td className="bg-red-50">
+                      <td className="bg-red-50" style={{ minWidth: '80px' }}>
                         <input
                           type="number"
-                          className="input w-14 text-center"
+                          className="text-center border border-yellow-400 rounded"
+                          style={{ padding: '6px 8px', backgroundColor: '#fefce8', height: '32px', width: '70px' }}
                           value={editForm.quota ?? 0}
                           onChange={(e) => setEditForm({ ...editForm, quota: parseInt(e.target.value) || 0 })}
                         />
                       </td>
                       <td className="text-center font-bold">{(editForm.current_count || 0) - (editForm.quota || 0)}</td>
-                      <td className="text-center">
+                      <td className="text-center whitespace-nowrap">
                         <button onClick={handleSave} className="text-green-600 hover:text-green-800 mr-2">저장</button>
                         <button onClick={handleCancel} className="text-gray-600 hover:text-gray-800">취소</button>
                       </td>

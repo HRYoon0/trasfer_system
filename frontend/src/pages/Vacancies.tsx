@@ -195,6 +195,7 @@ export default function Vacancies() {
           school_id: row.school_id as number,
           teacher_name: row.teacher_name,
           gender: row.gender || undefined,
+          birth_date: row.birth_date || undefined,
           destination: row.destination || undefined,
           separate_quota: row.separate_quota || undefined,
           note: row.note || undefined,
@@ -220,17 +221,42 @@ export default function Vacancies() {
     if (!editingId) return;
     try {
       if (activeTab === 'externalOut') {
-        await externalOutApi.update(editingId, editForm as Partial<ExternalOut>);
-      } else if (activeTab === 'vacancy') {
-        await vacancyApi.update(editingId, editForm as Partial<VacancyItem>);
+        const form = editForm as Partial<ExternalOut>;
+        // 필요한 필드만 명시적으로 선택
+        const updateData = {
+          transfer_type: form.transfer_type,
+          school_id: form.school_id,
+          teacher_name: form.teacher_name,
+          gender: form.gender,
+          birth_date: (form as any).birth_date,
+          destination: form.destination,
+          separate_quota: form.separate_quota,
+          note: form.note,
+        };
+        await externalOutApi.update(editingId, updateData);
       } else {
-        await supplementApi.update(editingId, editForm as Partial<VacancyItem>);
+        const form = editForm as Partial<VacancyItem>;
+        // 필요한 필드만 명시적으로 선택
+        const updateData = {
+          type_code: form.type_code,
+          school_id: form.school_id,
+          teacher_name: form.teacher_name,
+          gender: form.gender,
+          birth_date: form.birth_date,
+          note: form.note,
+        };
+        if (activeTab === 'vacancy') {
+          await vacancyApi.update(editingId, updateData);
+        } else {
+          await supplementApi.update(editingId, updateData);
+        }
       }
       setEditingId(null);
       setEditForm({});
       loadData();
     } catch (error) {
       console.error('수정 실패:', error);
+      alert('수정에 실패했습니다.');
     }
   };
 
@@ -488,14 +514,14 @@ export default function Vacancies() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th className="w-12 whitespace-nowrap text-center">순</th>
-                  <th className="w-20 text-center">구분</th>
-                  <th className="text-center">현임교</th>
-                  <th className="w-24 text-center">성명</th>
-                  <th className="w-14 text-center">성별</th>
-                  <th className="w-24 text-center">생년월일</th>
-                  <th className="text-center">비고</th>
-                  <th className="text-center w-24">관리</th>
+                  <th className="whitespace-nowrap text-center" style={{ minWidth: '40px' }}>순</th>
+                  <th className="text-center" style={{ minWidth: '80px' }}>구분</th>
+                  <th className="text-center" style={{ minWidth: '120px' }}>현임교</th>
+                  <th className="text-center" style={{ minWidth: '80px' }}>성명</th>
+                  <th className="text-center" style={{ minWidth: '50px' }}>성별</th>
+                  <th className="text-center" style={{ minWidth: '110px' }}>생년월일</th>
+                  <th className="text-center" style={{ minWidth: '200px' }}>비고</th>
+                  <th className="text-center" style={{ minWidth: '100px' }}>관리</th>
                 </tr>
               </thead>
               <tbody>
@@ -511,7 +537,7 @@ export default function Vacancies() {
                       {editingId === item.id ? (
                         <>
                           <td className="text-center">{index + 1}</td>
-                          <td>
+                          <td style={{ minWidth: '80px' }}>
                             <select className="input w-full" value={(editForm as Partial<VacancyItem>).type_code ?? ''} onChange={(e) => setEditForm({ ...editForm, type_code: e.target.value })}>
                               <option value="">선택</option>
                               {vacancyTypes.map((type) => (
@@ -519,7 +545,7 @@ export default function Vacancies() {
                               ))}
                             </select>
                           </td>
-                          <td>
+                          <td style={{ minWidth: '120px' }}>
                             <select className="input w-full" value={(editForm as Partial<VacancyItem>).school_id ?? ''} onChange={(e) => setEditForm({ ...editForm, school_id: parseInt(e.target.value) || null })}>
                               <option value="">학교 선택</option>
                               {sortedSchools.map((school) => (
@@ -527,23 +553,23 @@ export default function Vacancies() {
                               ))}
                             </select>
                           </td>
-                          <td>
+                          <td style={{ minWidth: '80px' }}>
                             <input type="text" className="input w-full" value={(editForm as Partial<VacancyItem>).teacher_name ?? ''} onChange={(e) => setEditForm({ ...editForm, teacher_name: e.target.value })} />
                           </td>
-                          <td>
+                          <td style={{ minWidth: '60px' }}>
                             <select className="input w-full" value={(editForm as Partial<VacancyItem>).gender ?? ''} onChange={(e) => setEditForm({ ...editForm, gender: e.target.value })}>
                               <option value="">-</option>
                               <option value="남">남</option>
                               <option value="여">여</option>
                             </select>
                           </td>
-                          <td>
+                          <td style={{ minWidth: '110px' }}>
                             <input type="text" className="input w-full text-center" placeholder="YYYY.MM.DD" value={(editForm as Partial<VacancyItem>).birth_date ?? ''} onChange={(e) => setEditForm({ ...editForm, birth_date: e.target.value })} />
                           </td>
-                          <td>
+                          <td style={{ minWidth: '200px' }}>
                             <input type="text" className="input w-full" value={(editForm as Partial<VacancyItem>).note ?? ''} onChange={(e) => setEditForm({ ...editForm, note: e.target.value })} />
                           </td>
-                          <td className="text-center">
+                          <td className="text-center whitespace-nowrap">
                             <button onClick={handleSave} className="text-green-600 hover:text-green-800 mr-2">저장</button>
                             <button onClick={handleCancel} className="text-gray-600 hover:text-gray-800">취소</button>
                           </td>
@@ -579,16 +605,16 @@ export default function Vacancies() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th className="w-12 text-center">순</th>
-                  <th className="w-20 text-center">구분</th>
-                  <th className="text-center">현임교</th>
-                  <th className="w-24 text-center">성명</th>
-                  <th className="w-14 text-center">성별</th>
-                  <th className="w-24 text-center">생년월일</th>
-                  <th className="text-center">배정지</th>
-                  <th className="w-24 text-center">별도정원</th>
-                  <th className="text-center">비고</th>
-                  <th className="text-center w-24">관리</th>
+                  <th className="text-center" style={{ minWidth: '40px' }}>순</th>
+                  <th className="text-center" style={{ minWidth: '80px' }}>구분</th>
+                  <th className="text-center" style={{ minWidth: '120px' }}>현임교</th>
+                  <th className="text-center" style={{ minWidth: '80px' }}>성명</th>
+                  <th className="text-center" style={{ minWidth: '50px' }}>성별</th>
+                  <th className="text-center" style={{ minWidth: '110px' }}>생년월일</th>
+                  <th className="text-center" style={{ minWidth: '100px' }}>배정지</th>
+                  <th className="text-center" style={{ minWidth: '80px' }}>별도정원</th>
+                  <th className="text-center" style={{ minWidth: '150px' }}>비고</th>
+                  <th className="text-center" style={{ minWidth: '100px' }}>관리</th>
                 </tr>
               </thead>
               <tbody>
@@ -604,13 +630,13 @@ export default function Vacancies() {
                       {editingId === item.id ? (
                         <>
                           <td className="text-center">{index + 1}</td>
-                          <td>
+                          <td style={{ minWidth: '80px' }}>
                             <select className="input w-full" value={(editForm as Partial<ExternalOut>).transfer_type ?? ''} onChange={(e) => setEditForm({ ...editForm, transfer_type: e.target.value })}>
                               <option value="타시군">타시군</option>
                               <option value="타시도">타시도</option>
                             </select>
                           </td>
-                          <td>
+                          <td style={{ minWidth: '120px' }}>
                             <select className="input w-full" value={(editForm as Partial<ExternalOut>).school_id ?? ''} onChange={(e) => setEditForm({ ...editForm, school_id: parseInt(e.target.value) || undefined })}>
                               <option value="">학교 선택</option>
                               {sortedSchools.map((school) => (
@@ -618,33 +644,33 @@ export default function Vacancies() {
                               ))}
                             </select>
                           </td>
-                          <td>
+                          <td style={{ minWidth: '80px' }}>
                             <input type="text" className="input w-full" value={(editForm as Partial<ExternalOut>).teacher_name ?? ''} onChange={(e) => setEditForm({ ...editForm, teacher_name: e.target.value })} />
                           </td>
-                          <td>
+                          <td style={{ minWidth: '60px' }}>
                             <select className="input w-full" value={(editForm as Partial<ExternalOut>).gender ?? ''} onChange={(e) => setEditForm({ ...editForm, gender: e.target.value })}>
                               <option value="">-</option>
                               <option value="남">남</option>
                               <option value="여">여</option>
                             </select>
                           </td>
-                          <td>
+                          <td style={{ minWidth: '110px' }}>
                             <input type="text" className="input w-full text-center" placeholder="YYYY.MM.DD" value={(editForm as any).birth_date ?? ''} onChange={(e) => setEditForm({ ...editForm, birth_date: e.target.value } as any)} />
                           </td>
-                          <td>
+                          <td style={{ minWidth: '100px' }}>
                             <input type="text" className="input w-full" value={(editForm as Partial<ExternalOut>).destination ?? ''} onChange={(e) => setEditForm({ ...editForm, destination: e.target.value })} />
                           </td>
-                          <td>
+                          <td style={{ minWidth: '80px' }}>
                             <select className="input w-full" value={(editForm as Partial<ExternalOut>).separate_quota ?? ''} onChange={(e) => setEditForm({ ...editForm, separate_quota: e.target.value })}>
                               <option value="">-</option>
                               <option value="휴직">휴직</option>
                               <option value="파견">파견</option>
                             </select>
                           </td>
-                          <td>
+                          <td style={{ minWidth: '150px' }}>
                             <input type="text" className="input w-full" value={(editForm as Partial<ExternalOut>).note ?? ''} onChange={(e) => setEditForm({ ...editForm, note: e.target.value })} />
                           </td>
-                          <td className="text-center">
+                          <td className="text-center whitespace-nowrap">
                             <button onClick={handleSave} className="text-green-600 hover:text-green-800 mr-2">저장</button>
                             <button onClick={handleCancel} className="text-gray-600 hover:text-gray-800">취소</button>
                           </td>

@@ -16,6 +16,7 @@ export default function External() {
     school_id: 0,
     teacher_name: '',
     gender: '',
+    birth_date: '',
     destination: '',
     separate_quota: '',
     note: '',
@@ -25,6 +26,7 @@ export default function External() {
     origin_school: '',
     teacher_name: '',
     gender: '',
+    birth_date: '',
     assigned_school_id: null as number | null,
     separate_quota: '',
     note: '',
@@ -63,6 +65,7 @@ export default function External() {
         school_id: 0,
         teacher_name: '',
         gender: '',
+        birth_date: '',
         destination: '',
         separate_quota: '',
         note: '',
@@ -86,6 +89,7 @@ export default function External() {
         origin_school: '',
         teacher_name: '',
         gender: '',
+        birth_date: '',
         assigned_school_id: null,
         separate_quota: '',
         note: '',
@@ -194,7 +198,7 @@ export default function External() {
               onChange={(e) => setNewOut({ ...newOut, teacher_name: e.target.value })}
             />
           </div>
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-5 gap-4">
             <select
               className="select"
               value={newOut.gender}
@@ -204,6 +208,13 @@ export default function External() {
               <option value="남">남</option>
               <option value="여">여</option>
             </select>
+            <input
+              type="text"
+              placeholder="생년월일"
+              className="input"
+              value={newOut.birth_date}
+              onChange={(e) => setNewOut({ ...newOut, birth_date: e.target.value })}
+            />
             <input
               type="text"
               placeholder="전출지"
@@ -261,7 +272,7 @@ export default function External() {
               onChange={(e) => setNewIn({ ...newIn, teacher_name: e.target.value })}
             />
           </div>
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-5 gap-4">
             <select
               className="select"
               value={newIn.gender}
@@ -271,6 +282,13 @@ export default function External() {
               <option value="남">남</option>
               <option value="여">여</option>
             </select>
+            <input
+              type="text"
+              placeholder="생년월일"
+              className="input"
+              value={newIn.birth_date}
+              onChange={(e) => setNewIn({ ...newIn, birth_date: e.target.value })}
+            />
             <select
               className="select"
               value={newIn.assigned_school_id ?? ''}
@@ -315,6 +333,7 @@ export default function External() {
                   <th>현소속</th>
                   <th>교사명</th>
                   <th>성별</th>
+                  <th>생년월일</th>
                   <th>전출지</th>
                   <th>별도정원</th>
                   <th>비고</th>
@@ -324,7 +343,7 @@ export default function External() {
               <tbody>
                 {outList.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="text-center text-gray-500 py-8">
+                    <td colSpan={10} className="text-center text-gray-500 py-8">
                       관외전출 데이터가 없습니다.
                     </td>
                   </tr>
@@ -336,6 +355,7 @@ export default function External() {
                       <td>{item.school_name}</td>
                       <td className="font-medium">{item.teacher_name}</td>
                       <td>{item.gender}</td>
+                      <td>{item.birth_date}</td>
                       <td>{item.destination}</td>
                       <td>{item.separate_quota}</td>
                       <td className="text-gray-500">{item.note}</td>
@@ -368,6 +388,7 @@ export default function External() {
                   <th>원소속</th>
                   <th>교사명</th>
                   <th>성별</th>
+                  <th>생년월일</th>
                   <th>배치학교</th>
                   <th>별도정원</th>
                   <th>비고</th>
@@ -377,7 +398,7 @@ export default function External() {
               <tbody>
                 {inList.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="text-center text-gray-500 py-8">
+                    <td colSpan={10} className="text-center text-gray-500 py-8">
                       관외전입 데이터가 없습니다.
                     </td>
                   </tr>
@@ -389,6 +410,7 @@ export default function External() {
                       <td>{item.origin_school}</td>
                       <td className="font-medium">{item.teacher_name}</td>
                       <td>{item.gender}</td>
+                      <td>{item.birth_date}</td>
                       <td>{item.assigned_school_name || '-'}</td>
                       <td>{item.separate_quota}</td>
                       <td className="text-gray-500">{item.note}</td>

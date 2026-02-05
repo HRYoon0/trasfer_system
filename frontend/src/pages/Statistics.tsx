@@ -187,7 +187,29 @@ export default function Statistics() {
       // 현원 남/여
       const currentMale = school.male_count || 0;
       const currentFemale = school.female_count || 0;
-      const total = currentMale + currentFemale;
+
+      // 남여성비 계산 (원본 엑셀 수식: =D-I-L-O-R-U-X-AA-AD-AG+AK+AN+AQ-AU-AX-BA+BD+BH+BK+BN+BQ)
+      // 전보 후 예상 남/여 수 = 현원 - 결원 + 충원 - 전출(타시도+타시군+관내-별도정원) + 전입(관내+타시군+타시도+신규)
+      const cntF = (items: {gender: string | null}[]) => items.filter(i => i.gender === '여').length;
+      const vacF = cntF(schoolVac);
+      const supF = cntF(schoolSup);
+      const outCityF = cntF(outCityData);
+      const outDistF = cntF(outDistrictData);
+      const outIntF = cntF(outInternalData);
+      const outSepF = cntF([...outSepExtData, ...outSepIntData]);
+      const inIntF = cntF(inInternalData);
+      const inDistF = cntF(inDistrictData);
+      const inCityF = cntF(inCityData);
+      const inNewF = cntF(inNewData);
+
+      const genderFemale = currentFemale - vacF + supF
+        - outCityF - outDistF - outIntF + outSepF
+        + inIntF + inDistF + inCityF + inNewF;
+      const genderMale = currentMale
+        - (vacTotal - vacF) + (supTotal - supF)
+        - (outCityData.length - outCityF) - (outDistrictData.length - outDistF) - (outInternalData.length - outIntF) + (outSepCount - outSepF)
+        + (inInternalData.length - inIntF) + (inDistrictData.length - inDistF) + (inCityData.length - inCityF) + (inNewData.length - inNewF);
+      const genderTotal = genderMale + genderFemale;
 
       return {
         code: idx + 1,
@@ -226,11 +248,11 @@ export default function Statistics() {
         inTotal, inTotalNames: [...inInternalData.map(t => `${t.current_school_name || ''} ${t.teacher_name}`), ...inDistrictData.map(e => `${e.origin_school || ''} ${e.teacher_name}`), ...inCityData.map(e => `${e.origin_school || ''} ${e.teacher_name}`), ...inNewData.map(e => `신규 ${e.teacher_name}`)],
         // 현재 과부족
         currentShortage,
-        // 남여성비
-        male: currentMale,
-        female: currentFemale,
-        maleRatio: total > 0 ? Math.round(currentMale / total * 100) : 0,
-        femaleRatio: total > 0 ? Math.round(currentFemale / total * 100) : 0,
+        // 남여성비 (전보 후 예상)
+        male: genderMale,
+        female: genderFemale,
+        maleRatio: genderTotal > 0 ? Math.round(genderMale / genderTotal * 100) : 0,
+        femaleRatio: genderTotal > 0 ? Math.round(genderFemale / genderTotal * 100) : 0,
       };
     });
   }, [schools, vacancies, supplements, externalOut, externalIn, internal]);

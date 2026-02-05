@@ -868,7 +868,7 @@ export default function Priority() {
               <h3 className="text-lg font-semibold mb-3">과원 추가</h3>
               <p className="text-sm text-gray-500 mb-3">
                 과원순번이 높을수록(숫자가 클수록) 먼저 과원해소 대상이 됩니다.<br/>
-                "현학교 남기"를 체크한 사람만 과원해소 점검 대상입니다.
+                남기/전보희망 모두 점검 대상입니다. (남기 선택자는 조건 충족 시 과원해소 우선)
               </p>
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse">
